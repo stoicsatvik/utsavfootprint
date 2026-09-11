@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-"""STAC scene discovery for satellite/remote-sensing inputs.
-
-This discovers imagery only. It does not magically convert a 10-30 m satellite pixel into a street
-waste measurement. Downstream models may emit observations if they can justify that inference.
-"""
+"""STAC scene discovery for satellite/remote-sensing inputs."""
 
 from datetime import datetime
 from typing import Any
@@ -17,15 +13,17 @@ async def search_scenes(
     bbox: tuple[float, float, float, float],
     start: datetime,
     end: datetime,
-    collections: list[str],
+    collections: list[str] | None = None,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
-    payload = {
+    payload: dict[str, Any] = {
         "bbox": list(bbox),
         "datetime": f"{start.isoformat()}/{end.isoformat()}",
-        "collections": collections,
         "limit": limit,
     }
+    if collections:
+        payload["collections"] = collections
+
     async with httpx.AsyncClient(timeout=30) as client:
         r = await client.post(f"{endpoint.rstrip('/')}/search", json=payload)
         r.raise_for_status()

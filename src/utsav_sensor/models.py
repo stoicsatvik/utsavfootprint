@@ -78,3 +78,12 @@ class HotspotState(BaseModel):
     unresolved_waste_hours_low: float | None = None
     unresolved_waste_hours_high: float | None = None
     observation_ids: list[str]
+
+
+class SourceHealth(BaseModel):
+    source_id: str
+    source_type: SourceType
+    last_ingested_at: datetime
+    observation_count: int
+    age_seconds: float = Field(ge=0)
+    state: str

@@ -3,4 +3,10 @@ services:
     build: .
     ports:
       - "8000:8000"
+    environment:
+      UTSAV_DB_PATH: /data/utsav.db
+    volumes:
+      - utsav-data:/data
     restart: unless-stopped
+volumes:
+  utsav-data:
