@@ -1,0 +1,12 @@
+{
+  "api": "http://127.0.0.1:8000",
+  "cameras": [
+    {
+      "source_id": "dadar-authorised-cam-01",
+      "url_env": "UTSAV_CAM_DADAR_01",
+      "lat": 19.0178,
+      "lon": 72.8478,
+      "persist_seconds": 120
+    }
+  ]
+}
