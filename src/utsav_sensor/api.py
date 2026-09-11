@@ -7,6 +7,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
