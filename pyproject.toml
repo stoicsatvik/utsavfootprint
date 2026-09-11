@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "utsav-sensor"
+version = "0.1.0"
+description = "Open-source virtual sensor network for festival externalities"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "pydantic>=2.8",
+  "httpx>=0.27",
+  "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+cctv = ["opencv-python-headless>=4.10", "numpy>=2.0"]
+dev = ["pytest>=8.2", "pytest-asyncio>=0.23", "ruff>=0.6"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/utsav_sensor"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+[tool.ruff]
+line-length = 100

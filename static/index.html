@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Utsav Footprint Live Sensor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    *{box-sizing:border-box}body{margin:0;background:#0a0c10;color:#f4f4f5;font:14px system-ui,-apple-system,sans-serif}header{padding:18px 22px;border-bottom:1px solid #252933;display:flex;gap:24px;align-items:center}h1{margin:0;font-size:18px}.muted{color:#9ca3af}#map{height:calc(100vh - 66px)}.badge{padding:4px 8px;border:1px solid #3f4654;border-radius:999px}.leaflet-popup-content-wrapper,.leaflet-popup-tip{background:#111827;color:#fff}.metric{font-size:20px;font-weight:700}.row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+  </style>
+</head>
+<body>
+<header><h1>UTSAV FOOTPRINT</h1><span class="badge">LIVE VIRTUAL SENSOR</span><span id="count" class="muted">0 hotspots</span><span class="muted">Every value carries provenance + uncertainty</span></header>
+<div id="map"></div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const map=L.map('map').setView([19.076,72.8777],11);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+let markers=[];
+function render(items){markers.forEach(m=>m.remove());markers=[];document.getElementById('count').textContent=`${items.length} hotspots`;
+ for(const h of items){const radius=8+18*h.confidence;const m=L.circleMarker([h.lat,h.lon],{radius,weight:2,fillOpacity:.55});
+ const mass=h.mass_kg_low==null?'unknown':`${h.mass_kg_low.toFixed(1)}–${h.mass_kg_high.toFixed(1)} kg (${h.mass_basis})`;
+ const mats=Object.entries(h.materials).sort((a,b)=>b[1]-a[1]).slice(0,4).map(([k,v])=>`${k}: ${(100*v).toFixed(0)}%`).join('<br>')||'unclassified';
+ m.bindPopup(`<b>${h.id}</b><div class='row'><div>Confidence<br><span class='metric'>${(100*h.confidence).toFixed(0)}%</span></div><div>Freshness<br><span class='metric'>${(100*h.freshness).toFixed(0)}%</span></div></div><p>Status: <b>${h.status}</b><br>Sources: ${h.independent_sources}<br>Mass: ${mass}<br>Unresolved: ${h.unresolved_hours.toFixed(1)} h</p><div>${mats}</div>`);m.addTo(map);markers.push(m)}}
+async function refresh(){const r=await fetch('/v1/hotspots');render(await r.json())}refresh();setInterval(refresh,15000);
+const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/v1/stream`);ws.onmessage=e=>render(JSON.parse(e.data));
+</script>
+</body>
+</html>
