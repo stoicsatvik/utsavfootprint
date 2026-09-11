@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from statistics import median
 
 from .models import HotspotState, Observation, Provenance
@@ -45,11 +45,7 @@ def observation_strength(obs: Observation, now: datetime) -> float:
 def cluster_observations(
     observations: list[Observation], radius_m: float = 120.0, window_hours: float = 24.0
 ) -> list[list[Observation]]:
-    """Greedy spatiotemporal clustering. Deterministic for timestamp-sorted input.
-
-    The radius is intentionally tight enough for street-scale reports. Production can replace this
-    with H3/DBSCAN without changing the fusion contract.
-    """
+    """Greedy deterministic spatiotemporal clustering."""
     clusters: list[list[Observation]] = []
     for obs in sorted(observations, key=lambda x: (x.observed_at, x.id)):
         best: list[Observation] | None = None
@@ -75,8 +71,7 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
     if not candidates:
         return None, None, None
 
-    # A measured/official value dominates model/citizen estimates. Repeated views of the same pile
-    # are estimates of one latent mass, so they are NEVER summed.
+    # Repeated views estimate one latent pile; they are never summed.
     rank = {
         Provenance.VERIFIED_OFFICIAL: 3,
         Provenance.MEASURED: 3,
@@ -91,7 +86,6 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
         s = max(observation_strength(o, now), 0.01)
         weighted.append((o.mass_kg_low, o.mass_kg_high, s, o.provenance))
 
-    # Robust against one wild estimate: use medians, while retaining uncertainty bounds.
     low = float(median([x[0] for x in weighted]))
     high = float(median([x[1] for x in weighted]))
     basis = max((x[3] for x in weighted), key=lambda p: PROVENANCE_WEIGHT[p])
@@ -101,17 +95,15 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
 def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> HotspotState:
     if not cluster:
         raise ValueError("cannot fuse empty cluster")
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
 
     strengths = [observation_strength(o, now) for o in cluster]
     total_s = sum(strengths) or 1.0
-    lat = sum(o.lat * s for o, s in zip(cluster, strengths)) / total_s
-    lon = sum(o.lon * s for o, s in zip(cluster, strengths)) / total_s
+    lat = sum(o.lat * s for o, s in zip(cluster, strengths, strict=True)) / total_s
+    lon = sum(o.lon * s for o, s in zip(cluster, strengths, strict=True)) / total_s
 
-    # Independent corroboration increases confidence, but correlated reports from the same source
-    # do not. No single weak report can become 'certain' merely by being replayed.
     strongest_by_source: dict[str, float] = {}
-    for o, s in zip(cluster, strengths):
+    for o, s in zip(cluster, strengths, strict=True):
         strongest_by_source[o.source_id] = max(strongest_by_source.get(o.source_id, 0.0), s)
     combined_confidence = 1.0
     for s in strongest_by_source.values():
@@ -123,7 +115,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
-    for o, s in zip(cluster, strengths):
+    for o, s in zip(cluster, strengths, strict=True):
         for k, p in o.materials.items():
             material_num[k] += p * s
             material_den[k] += s
@@ -138,16 +130,13 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     first_open = min(o.observed_at for o in cluster)
     unresolved_hours = max(0.0, (now - first_open).total_seconds() / 3600) if unresolved else 0.0
 
-    # Resolution evidence wins only when it is at least as recent as the latest open evidence.
     latest = max(cluster, key=lambda o: o.observed_at)
-    status = latest.status
-
     hotspot_id = "hs_" + min(o.id for o in cluster).replace("-", "")[:16]
     return HotspotState(
         id=hotspot_id,
         lat=lat,
         lon=lon,
-        status=status,
+        status=latest.status,
         observation_count=len(cluster),
         independent_sources=len(strongest_by_source),
         last_observed_at=last_seen,
@@ -165,6 +154,6 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
 
 def build_hotspots(observations: list[Observation], now: datetime | None = None) -> list[HotspotState]:
-    now = now or datetime.now(timezone.utc)
+    now = now or datetime.now(UTC)
     active = [o for o in observations if (now - o.observed_at).total_seconds() <= 72 * 3600]
     return [fuse_cluster(c, now) for c in cluster_observations(active)]

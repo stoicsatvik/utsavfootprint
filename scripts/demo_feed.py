@@ -1,8 +1,9 @@
+#!/usr/bin/env python3
 from __future__ import annotations
 
 import random
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -22,7 +23,7 @@ for i in range(18):
         "source_id": f"demo-user-{i % 9}",
         "lat": lat + random.uniform(-0.00025, 0.00025),
         "lon": lon + random.uniform(-0.00025, 0.00025),
-        "observed_at": datetime.now(timezone.utc).isoformat(),
+        "observed_at": datetime.now(UTC).isoformat(),
         "confidence": random.uniform(0.55, 0.9),
         "media_quality": random.uniform(0.6, 1.0),
         "materials": {"flowers": random.uniform(0.5, 1), "plastic": random.uniform(0.1, 0.7)},

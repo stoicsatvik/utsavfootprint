@@ -2,14 +2,14 @@ from __future__ import annotations
 
 """Authorised CCTV persistent-change candidate generator.
 
-This module intentionally does NOT discover public cameras, bypass credentials, identify people,
-or claim a persistent blob is definitely waste. It converts a camera the operator is authorised to
-use into low-confidence *candidate* observations that require corroboration.
+This module does not discover cameras, bypass credentials, identify people, or claim a persistent
+blob is definitely waste. It converts an explicitly supplied authorised stream into low-confidence
+candidate observations that require corroboration.
 """
 
 import argparse
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -25,7 +25,9 @@ def run(rtsp_url: str, api_url: str, source_id: str, lat: float, lon: float, per
     if not cap.isOpened():
         raise SystemExit("Could not open the explicitly supplied camera stream")
 
-    subtractor = cv2.createBackgroundSubtractorMOG2(history=800, varThreshold=32, detectShadows=False)
+    subtractor = cv2.createBackgroundSubtractorMOG2(
+        history=800, varThreshold=32, detectShadows=False
+    )
     first_seen: float | None = None
     last_emit = 0.0
 
@@ -34,7 +36,6 @@ def run(rtsp_url: str, api_url: str, source_id: str, lat: float, lon: float, per
         if not ok:
             time.sleep(1)
             continue
-        # Process a small grayscale frame in memory. No frame is persisted or uploaded.
         h, w = frame.shape[:2]
         scale = min(1.0, 640 / max(w, 1))
         small = cv2.resize(frame, (int(w * scale), int(h * scale)))
@@ -57,7 +58,7 @@ def run(rtsp_url: str, api_url: str, source_id: str, lat: float, lon: float, per
                 "source_id": source_id,
                 "lat": lat,
                 "lon": lon,
-                "observed_at": datetime.now(timezone.utc).isoformat(),
+                "observed_at": datetime.now(UTC).isoformat(),
                 "confidence": min(0.55, 0.25 + changed_fraction),
                 "media_quality": 0.8,
                 "materials": {},
@@ -69,7 +70,8 @@ def run(rtsp_url: str, api_url: str, source_id: str, lat: float, lon: float, per
                     "requires_corroboration": True,
                 },
             }
-            httpx.post(f"{api_url.rstrip('/')}/v1/observations", json=payload, timeout=10).raise_for_status()
+            endpoint = f"{api_url.rstrip('/')}/v1/observations"
+            httpx.post(endpoint, json=payload, timeout=10).raise_for_status()
             last_emit = now
 
 

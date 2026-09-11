@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class Provenance(StrEnum):
@@ -31,8 +31,8 @@ class Observation(BaseModel):
     source_id: str = Field(min_length=1, max_length=200)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
-    observed_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    ingested_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    ingested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     confidence: float = Field(default=0.5, ge=0, le=1)
     media_quality: float = Field(default=1.0, ge=0, le=1)
     materials: dict[str, float] = Field(default_factory=dict)
@@ -49,10 +49,15 @@ class Observation(BaseModel):
             raise ValueError("material probabilities must be in [0, 1]")
         return value
 
-    def model_post_init(self, __context: Any) -> None:
-        if self.mass_kg_low is not None and self.mass_kg_high is not None:
-            if self.mass_kg_low > self.mass_kg_high:
-                raise ValueError("mass_kg_low cannot exceed mass_kg_high")
+    @model_validator(mode="after")
+    def valid_mass_range(self):
+        if (
+            self.mass_kg_low is not None
+            and self.mass_kg_high is not None
+            and self.mass_kg_low > self.mass_kg_high
+        ):
+            raise ValueError("mass_kg_low cannot exceed mass_kg_high")
+        return self
 
 
 class HotspotState(BaseModel):

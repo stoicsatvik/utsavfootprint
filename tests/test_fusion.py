@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from utsav_sensor.fusion import build_hotspots, freshness
 from utsav_sensor.models import Observation
@@ -20,15 +20,15 @@ def obs(source, lat=19.076, lon=72.8777, provenance="observed", low=10, high=20,
 
 
 def test_nearby_reports_fuse_but_mass_is_not_summed():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     hs = build_hotspots([obs("a"), obs("b", lat=19.0761, low=12, high=22)], now=now)
     assert len(hs) == 1
     assert hs[0].independent_sources == 2
-    assert hs[0].mass_kg_high < 30  # 20 + 22 would be a bogus double count
+    assert hs[0].mass_kg_high < 30
 
 
 def test_measurement_dominates_modelled_mass():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     hs = build_hotspots(
         [
             obs("camera", provenance="modelled", source_type="cctv", low=100, high=300),
@@ -47,5 +47,5 @@ def test_same_source_replays_do_not_create_fake_independent_verification():
 
 
 def test_freshness_halves_after_half_life():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     assert abs(freshness(now - timedelta(hours=4), now) - 0.5) < 1e-9
