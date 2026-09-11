@@ -4,16 +4,17 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 
 from .adapters.nasa import search_nasa_scenes
 from .engine import SensorEngine
 from .models import Observation
+from .place_query import geocode_place, summarize_coordinates
 from .store import SQLiteObservationStore
 
 store = SQLiteObservationStore(os.getenv("UTSAV_DB_PATH", "data/utsav.db"))
@@ -27,7 +28,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="Utsav Footprint Sensor API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Utsav Footprint Sensor API", version="0.3.0", lifespan=lifespan)
 
 
 class SatelliteSearchRequest(BaseModel):
@@ -68,7 +69,7 @@ async def dashboard():
 
 @app.get("/healthz")
 async def healthz():
-    return {"ok": True, "sensor": "utsav-footprint", "version": "0.2.0"}
+    return {"ok": True, "sensor": "utsav-footprint", "version": "0.3.0"}
 
 
 @app.post("/v1/observations", response_model=Observation)
@@ -92,6 +93,50 @@ async def hotspot(hotspot_id: str):
         if state.id == hotspot_id:
             return state
     raise HTTPException(status_code=404, detail="hotspot not found")
+
+
+@app.get("/v1/place/summary")
+async def place_summary(
+    place: str = Query(min_length=2, description="Human place name, e.g. Talao Pali, Thane"),
+    radius_m: float = Query(default=500.0, gt=0, le=5000),
+    hours: float = Query(default=24.0, gt=0, le=24 * 31),
+):
+    try:
+        resolved = await geocode_place(place)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except (httpx.HTTPError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail=f"geocoder unavailable: {exc}") from exc
+
+    end = datetime.now(UTC)
+    start = end - timedelta(hours=hours)
+    return summarize_coordinates(
+        await engine.observations(),
+        resolved.lat,
+        resolved.lon,
+        radius_m=radius_m,
+        start=start,
+        end=end,
+        place=resolved,
+    )
+
+
+@app.get("/v1/area/summary")
+async def area_summary(
+    lat: float = Query(ge=-90, le=90),
+    lon: float = Query(ge=-180, le=180),
+    radius_m: float = Query(default=500.0, gt=0, le=5000),
+    hours: float = Query(default=24.0, gt=0, le=24 * 31),
+):
+    end = datetime.now(UTC)
+    return summarize_coordinates(
+        await engine.observations(),
+        lat,
+        lon,
+        radius_m=radius_m,
+        start=end - timedelta(hours=hours),
+        end=end,
+    )
 
 
 @app.get("/v1/sources")
