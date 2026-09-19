@@ -5,7 +5,6 @@ import pytest
 from utsav_sensor.calibration import CalibrationPair, evaluate_calibration
 from utsav_sensor.models import Observation, Provenance, SourceType
 
-
 T0 = datetime(2026, 9, 18, 10, tzinfo=UTC)
 
 
