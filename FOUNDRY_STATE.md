@@ -7,8 +7,8 @@
 
 ## Current evidence
 - Main head audited: `2a41d1937a0e8f081e22dc9be0febb870091fe31`.
-- Source-calibration implementation head validated: `558511752d38a17856c5487a3280d1f28632d6f5`.
-- Exact-head GitHub Actions run `35412743384` completed successfully: install `.[dev]`, `ruff check src tests scripts`, and `pytest -q` all passed on Python 3.12.
+- Source-calibration implementation head validated: `c106ecef41d94bf0cf0276539514598b39cea8a2`.
+- Exact-head GitHub Actions run `35557873699` completed successfully. Job `test` installed `.[dev]`, passed `ruff check src tests scripts`, and passed `pytest -q` on the PR head.
 - Implemented primitives include observation ingestion/streaming, geospatial-temporal hotspot clustering, freshness/confidence decay, provenance classes, mass-range fusion, material-probability fusion, unresolved-waste-hours, authorized CCTV candidate generation, STAC scene discovery, official JSON/CSV ingestion, place waste summary queries, and deterministic claim/reference calibration metrics.
 - Calibration fixtures prove measured/verified-official references must be later and traceable, repeated claims from one source cannot manufacture independent-source count, and evaluation reports empirical accuracy/Brier/mass-midpoint RMSE without mutating claims or fusion weights.
 
