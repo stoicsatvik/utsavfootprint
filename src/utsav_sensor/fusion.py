@@ -230,5 +230,12 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
 def build_hotspots(observations: list[Observation], now: datetime | None = None) -> list[HotspotState]:
     now = now or datetime.now(UTC)
-    active = [o for o in observations if (now - o.observed_at).total_seconds() <= 72 * 3600]
+    # Small producer clock offsets are tolerated, but a report far in the
+    # future must not influence today's hotspot state. Keep the stored report:
+    # it becomes eligible as the clock advances into the tolerance window.
+    active = [
+        o
+        for o in observations
+        if -5 * 60 <= (now - o.observed_at).total_seconds() <= 72 * 3600
+    ]
     return [fuse_cluster(c, now) for c in cluster_observations(active)]
