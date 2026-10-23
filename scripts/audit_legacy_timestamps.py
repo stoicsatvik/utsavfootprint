@@ -15,6 +15,10 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from utsav_sensor.models import Observation
+
 
 def parse_instant(value: object, row_id: str, field: str, issues: list[dict]):
     if not isinstance(value, str):
@@ -57,6 +61,25 @@ def audit_database(path: Path) -> tuple[dict, int]:
                 if not isinstance(payload, dict):
                     issues.append({"id": row_id, "field": "payload", "code": "invalid_object"})
                     continue
+                # A timestamp-only audit can pass a row that will fail startup.
+                # Preserve the stored ID: Pydantic supplies a default for missing IDs.
+                if "id" not in payload:
+                    issues.append({"id": row_id, "field": "payload.id", "code": "missing_id"})
+                elif payload["id"] != row_id:
+                    issues.append({"id": row_id, "field": "payload.id", "code": "id_mismatch"})
+                try:
+                    Observation.model_validate(payload)
+                except ValidationError as exc:
+                    # Timestamp errors already have more specific field-level codes.
+                    # Still surface unrelated schema failures in the same row.
+                    if any(
+                        not error["loc"]
+                        or error["loc"][0] not in ("observed_at", "ingested_at")
+                        for error in exc.errors()
+                    ):
+                        issues.append(
+                            {"id": row_id, "field": "payload", "code": "invalid_observation"}
+                        )
                 for field, column_instant in column_times.items():
                     payload_instant = parse_instant(
                         payload.get(field), row_id, f"payload.{field}", issues
