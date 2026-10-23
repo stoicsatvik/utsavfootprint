@@ -81,14 +81,18 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
     best_rank = max(rank[o.provenance] for o in candidates)
     candidates = [o for o in candidates if rank[o.provenance] == best_rank]
 
-    weighted = []
+    # Multiple reports from one source are correlated evidence, not independent
+    # votes. Estimate each source's latent mass first, then fuse sources equally.
+    # This protects the estimate against replay volume from a single reporter.
+    by_source: dict[str, list[Observation]] = defaultdict(list)
     for o in candidates:
-        s = max(observation_strength(o, now), 0.01)
-        weighted.append((o.mass_kg_low, o.mass_kg_high, s, o.provenance))
+        by_source[o.source_id].append(o)
 
-    low = float(median([x[0] for x in weighted]))
-    high = float(median([x[1] for x in weighted]))
-    basis = max((x[3] for x in weighted), key=lambda p: PROVENANCE_WEIGHT[p])
+    source_lows = [median([o.mass_kg_low for o in reports]) for reports in by_source.values()]
+    source_highs = [median([o.mass_kg_high for o in reports]) for reports in by_source.values()]
+    low = float(median(source_lows))
+    high = float(median(source_highs))
+    basis = max((o.provenance for o in candidates), key=lambda p: PROVENANCE_WEIGHT[p])
     return low, high, basis
 
 
