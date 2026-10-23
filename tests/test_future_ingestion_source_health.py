@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-import utsav_sensor.engine as engine_module
+from utsav_sensor import engine as engine_module
 from utsav_sensor.engine import SensorEngine
 from utsav_sensor.models import Observation
 
