@@ -73,6 +73,25 @@ longitude medians are not suitable for antimeridian-spanning observations.
 Hotspot IDs, status, unresolved age, and observation counts are outside this
 geospatial invariant. Geodetic and provenance policies require separate review.
 
+## Equal-timestamp identifier invariance (E171)
+
+Greedy clustering previously sorted by `(observed_at, observation_id)`.
+When three simultaneous observations formed a 120 m chain, merely renaming
+IDs changed the partition from `{A,B}, {C}` to `{A}, {B,C}`, even though
+sources, coordinates, timestamps, and other evidence were unchanged.
+
+The new tie-break is `(observed_at, lat, lon, source_id, id)`. Thus
+chronology remains primary, while random audit IDs cannot decide between
+geographic partitions. The final ID key only distinguishes observations with
+identical time, position, and source. This is a **narrow deterministic
+software invariant**, not a proof that greedy clustering is spatially optimal
+or insensitive to timestamps, conflicting coordinates, or source spoofing.
+
+The test-only commit `b131345d` failed as expected in
+[CI 39950742034](https://github.com/stoicsatvik/utsavfootprint/actions/runs/39950742034):
+**1 failed, 24 passed; Ruff passed**. The negative result is retained.
+
+
 ## North-star metric
 
 For hotspot `h` with mass interval `[m_low, m_high]` and unresolved age `t`:
