@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 import sqlite3
+from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -20,7 +21,7 @@ def parse_instant(value: object, row_id: str, field: str, issues: list[dict]):
         issues.append({"id": row_id, "field": field, "code": "invalid_timestamp"})
         return None
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(value)
     except ValueError:
         issues.append({"id": row_id, "field": field, "code": "invalid_timestamp"})
         return None
@@ -38,7 +39,7 @@ def audit_database(path: Path) -> tuple[dict, int]:
     total_rows = 0
     try:
         # SQLite mode=ro prevents accidental creation and database writes.
-        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as db:
+        with closing(sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)) as db:
             for row_id, observed, ingested, payload_text in db.execute(
                 "SELECT id, observed_at, ingested_at, payload "
                 "FROM observations ORDER BY id"
