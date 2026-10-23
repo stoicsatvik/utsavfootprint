@@ -57,6 +57,28 @@ For hotspot `h` with mass interval `[m_low, m_high]` and unresolved age `t`:
 
 Citywide unresolved-waste-hours can be summed only across deduplicated hotspots.
 
+## Cleanup and reopening lifecycle
+
+A hotspot is an observation history, not a permanently open waste pile. Under
+the existing status contract, `cleaned` and `verified` are terminal states.
+The most recent event by observation time, then ingestion time and ID, decides
+the current status. Terminal states have **zero unresolved-waste-hours** even
+when an older observation was open or the terminal report has no mass estimate.
+
+If an open/claimed/cleaning/candidate event arrives after a terminal event,
+it begins a new unresolved epoch. Current confidence, material fractions,
+location and mass estimates use **only the new epoch's observations**; the
+old evidence remains in the historical `observation_ids` and total count.
+This prevents an old scale reading or cleanup report from becoming evidence
+for a newly observed accumulation. The unresolved clock starts at the first
+event of the current epoch, not the first event in the hotspot's history.
+
+These are deterministic accounting rules, not proof that a cleanup physically
+occurred. A real deployment must authenticate cleanup/verification sources
+and calibrate delayed/out-of-order reporting before interpreting status as
+ground truth. Events with identical observation and ingestion timestamps
+are ordered by ID solely for reproducibility.
+
 ## CCTV
 
 The included adapter is deliberately conservative. It detects persistent scene change, not 'garbage'. A persistent visual change is emitted with `provenance=modelled`, `status=candidate` and low confidence. A future classifier can add material probabilities, but physical mass still requires calibration or measurement.
