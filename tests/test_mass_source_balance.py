@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 from utsav_sensor.fusion import fuse_cluster
 from utsav_sensor.models import Observation
 
-
 NOW = datetime(2026, 10, 23, 9, 0, tzinfo=UTC)
 
 
