@@ -7,15 +7,21 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
+import sys
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
-from scripts.audit_legacy_timestamps import audit_database
 from utsav_sensor.fusion import build_hotspots
 from utsav_sensor.models import Observation
 from utsav_sensor.store import SQLiteObservationStore
+
+
+ROOT = Path(__file__).resolve().parents[1]
+AUDIT = ROOT / "scripts" / "audit_legacy_timestamps.py"
 
 
 def valid_observation() -> Observation:
@@ -60,7 +66,15 @@ def test_legacy_audit_flags_nan_material_without_modifying_snapshot(tmp_path):
             ),
         )
     before = path.read_bytes()
-    report, status = audit_database(path)
+    completed = subprocess.run(
+        [sys.executable, str(AUDIT), str(path)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    report = json.loads(completed.stdout)
+    status = completed.returncode
     assert status == 2
     assert report["affected_rows"] == 1
     assert {"id": "nonfinite-row", "field": "payload", "code": "invalid_observation"} in report["issues"]
