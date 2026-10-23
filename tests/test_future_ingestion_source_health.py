@@ -12,7 +12,6 @@ import pytest
 from utsav_sensor.engine import SensorEngine
 from utsav_sensor.models import Observation
 
-
 NOW = datetime(2026, 10, 24, 0, 0, tzinfo=UTC)
 
 
