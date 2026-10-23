@@ -92,18 +92,45 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
     return low, high, basis
 
 
+RESOLVED_STATUSES = frozenset({"cleaned", "verified"})
+
+
+def _current_epoch(cluster: list[Observation]) -> tuple[list[Observation], Observation, datetime | None]:
+    """Return evidence relevant to the latest cleanup/reopening state.
+
+    Observation time defines physical ordering; ingestion time breaks ties for
+    late reports, and id makes the result independent of input list order.
+    A resolved hotspot keeps its latest closure as current-state evidence.
+    Reopening starts a new epoch; older mass and confidence cannot leak forward.
+    Full observation history remains available via observation_ids.
+    """
+    ordered = sorted(cluster, key=lambda o: (o.observed_at, o.ingested_at, o.id))
+    latest = ordered[-1]
+    if latest.status in RESOLVED_STATUSES:
+        return [latest], latest, None
+
+    last_closure = next(
+        (i for i in range(len(ordered) - 1, -1, -1)
+         if ordered[i].status in RESOLVED_STATUSES),
+        -1,
+    )
+    evidence = ordered[last_closure + 1:]
+    return evidence, latest, min(o.observed_at for o in evidence)
+
+
 def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> HotspotState:
     if not cluster:
         raise ValueError("cannot fuse empty cluster")
     now = now or datetime.now(UTC)
 
-    strengths = [observation_strength(o, now) for o in cluster]
+    evidence, latest, unresolved_since = _current_epoch(cluster)
+    strengths = [observation_strength(o, now) for o in evidence]
     total_s = sum(strengths) or 1.0
-    lat = sum(o.lat * s for o, s in zip(cluster, strengths, strict=True)) / total_s
-    lon = sum(o.lon * s for o, s in zip(cluster, strengths, strict=True)) / total_s
+    lat = sum(o.lat * s for o, s in zip(evidence, strengths, strict=True)) / total_s
+    lon = sum(o.lon * s for o, s in zip(evidence, strengths, strict=True)) / total_s
 
     strongest_by_source: dict[str, float] = {}
-    for o, s in zip(cluster, strengths, strict=True):
+    for o, s in zip(evidence, strengths, strict=True):
         strongest_by_source[o.source_id] = max(strongest_by_source.get(o.source_id, 0.0), s)
     combined_confidence = 1.0
     for s in strongest_by_source.values():
@@ -115,7 +142,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
-    for o, s in zip(cluster, strengths, strict=True):
+    for o, s in zip(evidence, strengths, strict=True):
         for k, p in o.materials.items():
             material_num[k] += p * s
             material_den[k] += s
@@ -125,12 +152,13 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         if material_den[k] > 0
     }
 
-    low, high, basis = _fuse_mass(cluster, now)
-    unresolved = any(o.status not in {"cleaned", "verified"} for o in cluster)
-    first_open = min(o.observed_at for o in cluster)
-    unresolved_hours = max(0.0, (now - first_open).total_seconds() / 3600) if unresolved else 0.0
+    low, high, basis = _fuse_mass(evidence, now)
+    unresolved = unresolved_since is not None
+    unresolved_hours = (
+        max(0.0, (now - unresolved_since).total_seconds() / 3600)
+        if unresolved_since is not None else 0.0
+    )
 
-    latest = max(cluster, key=lambda o: o.observed_at)
     hotspot_id = "hs_" + min(o.id for o in cluster).replace("-", "")[:16]
     return HotspotState(
         id=hotspot_id,
@@ -147,8 +175,12 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         mass_kg_high=high,
         mass_basis=basis,
         unresolved_hours=unresolved_hours,
-        unresolved_waste_hours_low=None if low is None else low * unresolved_hours,
-        unresolved_waste_hours_high=None if high is None else high * unresolved_hours,
+        unresolved_waste_hours_low=(
+            0.0 if not unresolved else (None if low is None else low * unresolved_hours)
+        ),
+        unresolved_waste_hours_high=(
+            0.0 if not unresolved else (None if high is None else high * unresolved_hours)
+        ),
         observation_ids=[o.id for o in cluster],
     )
 
