@@ -57,13 +57,14 @@ class SensorEngine:
 
         health = []
         for source_id, records in grouped.items():
-            latest = max(records, key=lambda x: x.ingested_at)
+            # A producer-controlled timestamp is not evidence of server receipt.
+            # Ignore implausibly future timestamps when choosing the latest
+            # report, but expose their count so clock-skew evidence is not lost.
+            eligible = [r for r in records if (r.ingested_at - now).total_seconds() <= 300]
+            skew_count = len(records) - len(eligible)
+            latest = max(eligible or records, key=lambda x: x.ingested_at)
             age = max(0.0, (now - latest.ingested_at).total_seconds())
-            # Clamping a future timestamp's age to zero must not certify it
-            # as live. Match the five-minute producer-skew tolerance used
-            # when gating future observations from active hotspots.
-            future_skew = (latest.ingested_at - now).total_seconds()
-            if future_skew > 5 * 60:
+            if not eligible:
                 state = "clock_skew"
             elif age <= stale_after_seconds:
                 state = "live"
@@ -75,6 +76,7 @@ class SensorEngine:
                     source_type=latest.source_type,
                     last_ingested_at=latest.ingested_at,
                     observation_count=len(records),
+                    clock_skew_count=skew_count,
                     age_seconds=age,
                     state=state,
                 )

@@ -95,5 +95,6 @@ class SourceHealth(BaseModel):
     source_type: SourceType
     last_ingested_at: datetime
     observation_count: int
+    clock_skew_count: int = Field(default=0, ge=0)
     age_seconds: float = Field(ge=0)
     state: str
