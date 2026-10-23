@@ -1,8 +1,7 @@
 """Regression evidence for cleanup/reopening epochs (synthetic, no field claims)."""
 
 from datetime import UTC, datetime, timedelta
-
-import pytest
+from math import isclose
 
 from utsav_sensor.fusion import build_hotspots
 from utsav_sensor.models import Observation
@@ -50,10 +49,10 @@ def test_reopening_starts_new_unresolved_epoch_without_old_mass_or_confidence():
         now=NOW,
     )[0]
     assert hotspot.status == "open"
-    assert hotspot.unresolved_hours == pytest.approx(0.5)
+    assert isclose(hotspot.unresolved_hours, 0.5, abs_tol=1e-9)
     assert hotspot.mass_kg_low == 5
     assert hotspot.mass_kg_high == 7
-    assert hotspot.unresolved_waste_hours_low == pytest.approx(2.5)
+    assert isclose(hotspot.unresolved_waste_hours_low, 2.5, abs_tol=1e-9)
     assert hotspot.independent_sources == 1
     assert hotspot.observation_count == 3  # history remains auditable
 
