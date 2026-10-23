@@ -19,7 +19,6 @@ from utsav_sensor.fusion import build_hotspots
 from utsav_sensor.models import Observation
 from utsav_sensor.store import SQLiteObservationStore
 
-
 ROOT = Path(__file__).resolve().parents[1]
 AUDIT = ROOT / "scripts" / "audit_legacy_timestamps.py"
 
