@@ -3,6 +3,7 @@
 Synthetic software invariance tests, not evidence of field geolocation accuracy.
 """
 import math
+import random
 from datetime import UTC, datetime, timedelta
 
 from utsav_sensor.fusion import cluster_observations, fuse_cluster
@@ -79,3 +80,24 @@ def test_zero_strength_coordinates_remain_geographic_not_zero_zero():
     assert math.isclose(state.lat, 19.0765, abs_tol=1e-12)
     assert math.isclose(state.lon, 72.8777, abs_tol=1e-12)
     assert state.confidence == 0.0
+
+
+def test_randomized_coordinate_replays_preserve_fused_location():
+    rng = random.Random(170)
+    for _ in range(250):
+        reports = [
+            report(
+                f"source-{i}",
+                19.076 + rng.randrange(-100, 101) / 100_000,
+                confidence=rng.randrange(1, 101) / 100,
+            )
+            for i in range(rng.randint(2, 8))
+        ]
+        baseline = fuse_cluster(reports, now=NOW)
+        repeated = reports[rng.randrange(len(reports))]
+        replayed = [*reports, *replays(repeated, rng.randint(1, 50))]
+        rng.shuffle(replayed)
+        result = fuse_cluster(replayed, now=NOW)
+        assert result.independent_sources == baseline.independent_sources
+        assert result.lat == baseline.lat
+        assert result.lon == baseline.lon
