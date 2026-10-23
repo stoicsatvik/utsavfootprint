@@ -4,6 +4,7 @@ These synthetic contract tests distinguish a 24-hour *cluster span* from a
 24-hour maximum gap between consecutive reports. No field data is used.
 """
 
+import random
 from datetime import UTC, datetime, timedelta
 
 from utsav_sensor.fusion import cluster_observations
@@ -54,3 +55,19 @@ def test_window_includes_exact_boundary_but_excludes_one_second_beyond():
     ]
     assert source_groups(on_boundary) == [("A", "B")]
     assert source_groups(outside) == [("A",), ("B",)]
+
+
+def test_seeded_clusters_never_exceed_configured_full_span():
+    rng = random.Random(173)
+    for trial in range(200):
+        elapsed_minutes = 0
+        reports = []
+        for i in range(rng.randint(3, 20)):
+            elapsed_minutes += rng.randint(0, 23 * 60)
+            reports.append(report(f"s{trial}-{i}", timedelta(minutes=elapsed_minutes)))
+        rng.shuffle(reports)
+        clusters = cluster_observations(reports, window_hours=24)
+        assert sum(len(cluster) for cluster in clusters) == len(reports)
+        for cluster in clusters:
+            times = [item.observed_at for item in cluster]
+            assert (max(times) - min(times)).total_seconds() <= 24 * 3600
