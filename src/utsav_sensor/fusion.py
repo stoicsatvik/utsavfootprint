@@ -132,8 +132,9 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
-    for source, per_material in source_values.items():
-        for material, values in per_material.items():
+    # Stable ordering also prevents float-summation drift under report permutations.
+    for source, per_material in sorted(source_values.items()):
+        for material, values in sorted(per_material.items()):
             weight = source_strengths[source][material]
             material_num[material] += float(median(values)) * weight
             material_den[material] += weight
