@@ -11,6 +11,5 @@ jobs:
         with:
           python-version: '3.12'
       - run: pip install -e '.[dev]'
-      - run: ruff check --diff tests/test_future_ingestion_source_health.py || true
       - run: ruff check src tests scripts
       - run: pytest -q
