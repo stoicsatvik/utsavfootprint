@@ -42,6 +42,50 @@ def observation_strength(obs: Observation, now: datetime) -> float:
     )
 
 
+
+def _source_balanced_center(
+    observations: list[Observation], strengths: list[float] | None = None
+) -> tuple[float, float]:
+    """Fuse one coordinate estimate per source, not one vote per report.
+
+    Each source's distinct coordinate claims contribute a coordinate-wise
+    median. Repeating an identical claim cannot move that source's center.
+    For fused hotspots, quality is applied once per source (its strongest
+    observation); for clustering, each source receives one equal vote.
+
+    Coordinates are treated as locally planar. Antimeridian-spanning
+    observations require a separate circular-longitude policy.
+    """
+    by_source: dict[str, set[tuple[float, float]]] = defaultdict(set)
+    for obs in observations:
+        by_source[obs.source_id].add((obs.lat, obs.lon))
+
+    source_strength: dict[str, float] = {}
+    if strengths is not None:
+        for obs, strength in zip(observations, strengths, strict=True):
+            source_strength[obs.source_id] = max(
+                source_strength.get(obs.source_id, 0.0), strength
+            )
+
+    centers: list[tuple[float, float, float]] = []
+    for source in sorted(by_source):
+        coords = sorted(by_source[source])
+        lat = float(median(lat for lat, _ in coords))
+        lon = float(median(lon for _, lon in coords))
+        centers.append((lat, lon, source_strength.get(source, 1.0)))
+
+    weights = [weight for _, _, weight in centers]
+    total = math.fsum(weights)
+    if total == 0.0:
+        # Zero-confidence observations still have locations. Do not return
+        # the invalid synthetic coordinate (0, 0).
+        weights = [1.0] * len(centers)
+        total = float(len(centers))
+    lat = math.fsum(center[0] * weight for center, weight in zip(centers, weights, strict=True)) / total
+    lon = math.fsum(center[1] * weight for center, weight in zip(centers, weights, strict=True)) / total
+    return lat, lon
+
+
 def cluster_observations(
     observations: list[Observation], radius_m: float = 120.0, window_hours: float = 24.0
 ) -> list[list[Observation]]:
@@ -54,8 +98,7 @@ def cluster_observations(
             newest = max(o.observed_at for o in c)
             if abs((obs.observed_at - newest).total_seconds()) > window_hours * 3600:
                 continue
-            c_lat = sum(o.lat for o in c) / len(c)
-            c_lon = sum(o.lon for o in c) / len(c)
+            c_lat, c_lon = _source_balanced_center(c)
             d = haversine_m(obs.lat, obs.lon, c_lat, c_lon)
             if d <= radius_m and d < best_d:
                 best, best_d = c, d
@@ -102,9 +145,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     now = now or datetime.now(UTC)
 
     strengths = [observation_strength(o, now) for o in cluster]
-    total_s = sum(strengths) or 1.0
-    lat = sum(o.lat * s for o, s in zip(cluster, strengths, strict=True)) / total_s
-    lon = sum(o.lon * s for o, s in zip(cluster, strengths, strict=True)) / total_s
+    lat, lon = _source_balanced_center(cluster, strengths)
 
     strongest_by_source: dict[str, float] = {}
     for o, s in zip(cluster, strengths, strict=True):
