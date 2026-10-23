@@ -29,7 +29,7 @@ water/air feeds ──────┘
 
 ## Why fusion instead of summation
 
-Five photographs of one 20 kg pile do not create 100 kg of waste. Reports inside one spatiotemporal cluster are observations of one latent state. The reference engine therefore uses repeated reports to improve confidence while using robust estimates for mass.
+Five photographs of one 20 kg pile do not create 100 kg of waste. Reports inside one spatiotemporal cluster are observations of one latent state. The reference engine therefore treats repeated reports as correlated evidence. They can add audit history but must not inflate confidence, mass, material probabilities, or hotspot location.
 
 Measured or traceable official quantities outrank pixel-derived estimates. Conflicting evidence remains visible through intervals and provenance instead of being averaged into fake certainty.
 
@@ -48,6 +48,30 @@ Independent-source evidence is fused as:
 `confidence = 1 - product(1 - strongest_strength_per_source)`
 
 Repeated messages from the same `source_id` cannot manufacture independence.
+
+## Geospatial replay invariance (E170)
+
+The original greedy clusterer and fused-hotspot coordinates averaged **reports**,
+not independent sources. In a synthetic three-source example with positions
+19.076°, 19.077°, and 19.078° latitude (same longitude), A and B formed one
+120 m cluster and C remained separate. Replaying B 100 times pulled the
+intermediate center toward B and incorrectly merged C. Likewise, the fused
+A/B center moved from 19.0765° to 19.076990196° without any new source.
+
+The reference implementation now computes one coordinate-wise median over
+**distinct (lat, lon) claims per source**, then one contribution per source.
+The greedy clusterer uses equal source weights. The fused hotspot center uses
+the strongest observation strength per source, with an equal-source fallback
+when all strengths are zero. Sources and coordinate pairs are processed in
+stable order; repeated identical claims do not move a center.
+
+The seeded regression suite includes 250 synthetic replay/permutation scenarios.
+This is a **software replay-invariance property**, not validation of physical
+locations. Source IDs can be spoofed, greedy clustering can remain sensitive
+to the order/timestamps of *different* coordinate claims, and coordinate-wise
+longitude medians are not suitable for antimeridian-spanning observations.
+Hotspot IDs, status, unresolved age, and observation counts are outside this
+geospatial invariant. Geodetic and provenance policies require separate review.
 
 ## North-star metric
 
