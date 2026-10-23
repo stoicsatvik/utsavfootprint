@@ -123,3 +123,25 @@ Reference v0.1 uses an in-memory engine for zero-friction local execution. Produ
 7. signed partner/authority ingestion keys.
 
 The fusion package remains deterministic and testable regardless of transport/storage choices.
+
+## Mixed-claim mass replay invariance (E172)
+
+E168 balanced sources but still used the median of *all reports* from each
+source. If source A reported distinct mass intervals [100, 110] and [200, 210]
+kg while independent source B reported [300, 310] kg, the original fused
+interval was [225, 235] kg. Replaying A's second interval under 100 different
+report IDs shifted it to [250, 260] kg, without adding independent evidence.
+
+The E172 correction treats an identical (low, high) interval from the same
+source as one mass claim, then takes a median over that source's **distinct
+intervals**. Distinct claims from the same source can still change its median.
+The source-level estimates remain equally weighted, and the original
+provenance-rank precedence is unchanged. Interval pairs are deduplicated
+together rather than treating bounds as unrelated claims.
+
+The test-only commit `bfa312e` failed as expected in
+[CI 39958735208](https://github.com/stoicsatvik/utsavfootprint/actions/runs/39958735208):
+**2 new failures, 26 passes, Ruff passed**. The original negative result is
+retained in branch history. This is a deterministic software replay-invariance
+contract, not proof of calibrated mass measurements, sensor independence,
+fraud resistance, or the statistical optimality of a distinct-claim median.
