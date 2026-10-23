@@ -59,6 +59,16 @@ class SensorEngine:
         for source_id, records in grouped.items():
             latest = max(records, key=lambda x: x.ingested_at)
             age = max(0.0, (now - latest.ingested_at).total_seconds())
+            # Clamping a future timestamp's age to zero must not certify it
+            # as live. Match the five-minute producer-skew tolerance used
+            # when gating future observations from active hotspots.
+            future_skew = (latest.ingested_at - now).total_seconds()
+            if future_skew > 5 * 60:
+                state = "clock_skew"
+            elif age <= stale_after_seconds:
+                state = "live"
+            else:
+                state = "stale"
             health.append(
                 SourceHealth(
                     source_id=source_id,
@@ -66,7 +76,7 @@ class SensorEngine:
                     last_ingested_at=latest.ingested_at,
                     observation_count=len(records),
                     age_seconds=age,
-                    state="live" if age <= stale_after_seconds else "stale",
+                    state=state,
                 )
             )
         return sorted(health, key=lambda x: x.last_ingested_at, reverse=True)
