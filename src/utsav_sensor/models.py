@@ -42,6 +42,15 @@ class Observation(BaseModel):
     external_ref: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+    @field_validator("observed_at", "ingested_at")
+    @classmethod
+    def require_explicit_timezone(cls, value: datetime) -> datetime:
+        # A naive wall-clock time has no unambiguous instant. Do not infer
+        # a producer's timezone from the server's environment.
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp must be timezone-aware")
+        return value.astimezone(UTC)
+
     @field_validator("materials")
     @classmethod
     def material_probs(cls, value: dict[str, float]) -> dict[str, float]:
