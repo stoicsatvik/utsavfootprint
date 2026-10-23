@@ -8,7 +8,6 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from utsav_sensor import engine as engine_module
 from utsav_sensor.engine import SensorEngine
 from utsav_sensor.models import Observation
 
@@ -36,7 +35,7 @@ def freeze_clock(monkeypatch, value: datetime) -> None:
             assert tz == UTC
             return value
 
-    monkeypatch.setattr(engine_module, "datetime", FixedDatetime)
+    monkeypatch.setattr("utsav_sensor.engine.datetime", FixedDatetime)
 
 
 @pytest.mark.asyncio
