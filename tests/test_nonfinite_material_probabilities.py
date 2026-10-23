@@ -12,10 +12,10 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from scripts.audit_legacy_timestamps import audit_database
+from utsav_sensor.fusion import build_hotspots
 from utsav_sensor.models import Observation
 from utsav_sensor.store import SQLiteObservationStore
-from utsav_sensor.fusion import build_hotspots
-from scripts.audit_legacy_timestamps import audit_database
 
 
 def valid_observation() -> Observation:
