@@ -3,6 +3,7 @@
 Synthetic, frozen-clock checks. Five minutes is the existing observation
 clock-skew policy, not a measured sensor synchronization guarantee.
 """
+from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
