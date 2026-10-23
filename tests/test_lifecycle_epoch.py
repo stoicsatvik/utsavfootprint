@@ -9,8 +9,8 @@ from utsav_sensor.models import Observation
 NOW = datetime(2026, 10, 24, 0, 0, tzinfo=UTC)
 
 
-def event(event_id: str, hours_ago: float, status: str, low: float = 10,
-          high: float = 20, *, ingested_minutes_later: float = 0) -> Observation:
+def event(event_id: str, hours_ago: float, status: str, low: float | None = 10,
+          high: float | None = 20, *, ingested_minutes_later: float = 0) -> Observation:
     observed = NOW - timedelta(hours=hours_ago)
     return Observation(
         id=event_id,
@@ -33,6 +33,22 @@ def test_cleanup_closes_unresolved_hours_even_with_older_open_report():
         [event("open-old", 5, "open"), event("cleanup", 1, "cleaned")], now=NOW
     )[0]
     assert hotspot.status == "cleaned"
+    assert hotspot.unresolved_hours == 0
+    assert hotspot.unresolved_waste_hours_low == 0
+    assert hotspot.unresolved_waste_hours_high == 0
+
+
+
+def test_resolved_hotspot_with_no_mass_still_has_zero_unresolved_exposure():
+    hotspot = build_hotspots(
+        [
+            event("old-report", 5, "open", 10, 20),
+            event("verified-cleanup", 1, "verified", None, None),
+        ],
+        now=NOW,
+    )[0]
+    assert hotspot.mass_kg_low is None
+    assert hotspot.mass_kg_high is None
     assert hotspot.unresolved_hours == 0
     assert hotspot.unresolved_waste_hours_low == 0
     assert hotspot.unresolved_waste_hours_high == 0
