@@ -93,7 +93,9 @@ def cluster_observations(
 
     At equal observation times, coordinates define a canonical order. Report
     IDs are audit identifiers and must not alter geographic cluster membership.
-    This remains a greedy heuristic, not an optimal spatial partition.
+    The time window bounds the full oldest-to-newest span of each cluster,
+    not merely the gap to its most recent observation. This remains a greedy
+    heuristic, not an optimal spatial partition.
     """
     clusters: list[list[Observation]] = []
     for obs in sorted(
@@ -103,8 +105,8 @@ def cluster_observations(
         best: list[Observation] | None = None
         best_d = float("inf")
         for c in clusters:
-            newest = max(o.observed_at for o in c)
-            if abs((obs.observed_at - newest).total_seconds()) > window_hours * 3600:
+            oldest = min(o.observed_at for o in c)
+            if (obs.observed_at - oldest).total_seconds() > window_hours * 3600:
                 continue
             c_lat, c_lon = _source_balanced_center(c)
             d = haversine_m(obs.lat, obs.lon, c_lat, c_lon)
