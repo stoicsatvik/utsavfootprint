@@ -145,3 +145,23 @@ The test-only commit `bfa312e` failed as expected in
 retained in branch history. This is a deterministic software replay-invariance
 contract, not proof of calibrated mass measurements, sensor independence,
 fraud resistance, or the statistical optimality of a distinct-claim median.
+
+
+## Full-span temporal clustering bound (E173)
+
+The previous greedy clusterer checked each incoming observation against only
+the **newest** timestamp in a candidate cluster. At a fixed location, synthetic
+observations at t=0h, t=23h, and t=46h were grouped into a single hotspot with
+the default 24-hour window. Each consecutive gap was shorter than 24 hours,
+but the resulting cluster spanned 46 hours. This is a temporal chaining defect.
+
+The E173 correction compares each new observation with the **oldest** timestamp
+already in the candidate cluster. Chronological processing ensures the
+oldest-to-newest span never exceeds the configured window. Exactly 24 hours
+remains inclusive; 24 hours plus one second is excluded. The test-only commit
+`adbe600` preserves the failing counterexample before the correction.
+
+This is a synthetic temporal contract check. It does not make the greedy
+algorithm invariant to changing observation timestamps or guarantee an
+optimal spatiotemporal partition. Timezone-naive timestamps and clocks with
+large offsets require separate input-policy decisions. No field data was used.
