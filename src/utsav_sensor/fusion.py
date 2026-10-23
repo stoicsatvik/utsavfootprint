@@ -89,9 +89,17 @@ def _source_balanced_center(
 def cluster_observations(
     observations: list[Observation], radius_m: float = 120.0, window_hours: float = 24.0
 ) -> list[list[Observation]]:
-    """Greedy deterministic spatiotemporal clustering."""
+    """Greedy spatiotemporal clustering with ID-independent tie-breaking.
+
+    At equal observation times, coordinates define a canonical order. Report
+    IDs are audit identifiers and must not alter geographic cluster membership.
+    This remains a greedy heuristic, not an optimal spatial partition.
+    """
     clusters: list[list[Observation]] = []
-    for obs in sorted(observations, key=lambda x: (x.observed_at, x.id)):
+    for obs in sorted(
+        observations,
+        key=lambda x: (x.observed_at, x.lat, x.lon, x.source_id, x.id),
+    ):
         best: list[Observation] | None = None
         best_d = float("inf")
         for c in clusters:
