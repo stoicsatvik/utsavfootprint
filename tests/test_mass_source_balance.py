@@ -1,7 +1,6 @@
 """E168: mass fusion must not count report volume as independent evidence."""
-from datetime import UTC, datetime
 import random
-from statistics import median
+from datetime import UTC, datetime
 
 from utsav_sensor.fusion import fuse_cluster
 from utsav_sensor.models import Observation
