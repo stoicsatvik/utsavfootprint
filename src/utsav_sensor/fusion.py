@@ -117,12 +117,27 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     last_seen = max(o.observed_at for o in cluster)
     fresh = freshness(last_seen, now)
 
+    # Replayed observations from one source must not manufacture independent
+    # material evidence. Within a source, repeated identical probability values
+    # are one claim; across sources, quality weights are applied once per source.
+    source_values: dict[str, dict[str, set[float]]] = defaultdict(lambda: defaultdict(set))
+    source_strengths: dict[str, dict[str, float]] = defaultdict(dict)
+    for o, s in zip(cluster, strengths, strict=True):
+        if s <= 0:
+            continue
+        for material, probability in o.materials.items():
+            source_values[o.source_id][material].add(probability)
+            weights = source_strengths[o.source_id]
+            weights[material] = max(weights.get(material, 0.0), s)
+
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
-    for o, s in zip(cluster, strengths, strict=True):
-        for k, p in o.materials.items():
-            material_num[k] += p * s
-            material_den[k] += s
+    # Stable ordering also prevents float-summation drift under report permutations.
+    for source, per_material in sorted(source_values.items()):
+        for material, values in sorted(per_material.items()):
+            weight = source_strengths[source][material]
+            material_num[material] += float(median(values)) * weight
+            material_den[material] += weight
     materials = {
         k: round(material_num[k] / material_den[k], 4)
         for k in material_num
