@@ -37,8 +37,8 @@ class Observation(BaseModel):
     confidence: float = Field(default=0.5, ge=0, le=1)
     media_quality: float = Field(default=1.0, ge=0, le=1)
     materials: dict[str, float] = Field(default_factory=dict)
-    mass_kg_low: float | None = Field(default=None, ge=0)
-    mass_kg_high: float | None = Field(default=None, ge=0)
+    mass_kg_low: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    mass_kg_high: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     status: str = Field(default="open", pattern="^(open|claimed|cleaning|cleaned|verified|candidate)$")
     external_ref: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
