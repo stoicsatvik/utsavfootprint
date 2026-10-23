@@ -56,3 +56,36 @@ automatic repair.
 **Next experiment:** evaluate an authorized sanitized legacy snapshot and
 quantify the prevalence of schema and ID integrity defects. Before any
 migration, establish provenance, make a backup, and prove rollback on a copy.
+
+
+## 2026-10-24 addendum: non-finite material-probability claim
+
+**Reproduced failure:** the model's former `v < 0 or v > 1` range check
+accepted `float("nan")` because neither comparison is true. Pydantic also
+accepted the corresponding `NaN` JSON token, despite its non-standard JSON
+representation. This could pass the E177 legacy audit with exit 0 and then
+propagate a non-finite material estimate into hotspot output, where strict
+JSON serialization may fail.
+
+**Test-first evidence:** CI run
+https://github.com/stoicsatvik/utsavfootprint/actions/runs/40008958789
+on commit `ee508e9` had **2 expected regression failures and 49 passes**:
+the model did not reject NaN and the read-only audit returned exit 0.
+Earlier intermediate CI runs exposed test import/formatting problems, which
+were corrected before interpreting the model-level failure.
+
+**Narrow correction:** material probabilities must be finite as well as in
+[0, 1]. Existing valid finite values retain their behavior. The existing
+read-only legacy audit now flags this case through its current
+`invalid_observation` code, without rewriting the snapshot.
+
+**Validation:** exact-head CI run
+https://github.com/stoicsatvik/utsavfootprint/actions/runs/40009057690
+on commit `fbb73bd` passed Ruff and **51/51 pytest tests**.
+The three added tests cover Python/JSON model rejection, an unchanged
+synthetic SQLite snapshot, and a valid finite-value fusion control.
+
+**Boundary:** This is synthetic validation only. It does not prove that any
+real stored record contains NaN or establish a safe migration policy. Do not
+automatically coerce non-finite claims to zero, and do not merge until the
+stack and any authorized legacy snapshot have been reviewed.
