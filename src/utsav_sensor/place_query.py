@@ -186,11 +186,15 @@ def summarize_coordinates(
     if authenticated_closure_digests is not None:
         accepted = []
         for obs in scoped:
-            if (obs.status in {"cleaned", "verified"}
-                    and closure_digest(obs) not in authenticated_closure_digests):
-                excluded_closures += 1
-            else:
-                accepted.append(obs)
+            if obs.status in {"cleaned", "verified"}:
+                try:
+                    attested = closure_digest(obs) in authenticated_closure_digests
+                except (TypeError, ValueError):
+                    attested = False
+                if not attested:
+                    excluded_closures += 1
+                    continue
+            accepted.append(obs)
         scoped = accepted
 
     if not scoped:
