@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from utsav_sensor.models import Observation
+from utsav_sensor.closure_auth import closure_digest
 from utsav_sensor.place_query import summarize_coordinates
 
 BASE = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
@@ -52,9 +53,52 @@ def test_untrusted_cleanup_cannot_erase_measured_open_waste(provenance: str):
         radius_m=100,
         start=BASE - timedelta(minutes=1),
         end=BASE + timedelta(hours=1),
+        authenticated_closure_digests=frozenset(),
     )
     # Desired policy: closure is not authoritative without an independent receipt.
+    assert result.excluded_unattested_closures == 1
     assert result.current_mass_kg_low == 100
     assert result.removed_mass_kg_low == 0
     assert result.unresolved_waste_hours_low is not None
     assert result.unresolved_waste_hours_low > 0
+
+
+def test_independently_attested_cleanup_can_close_the_track():
+    open_mass = observation(
+        "independent-mass", 0, status="open", provenance="measured",
+        source_type="partner", low=100, high=120,
+    )
+    closure = observation(
+        "attested-closure", 5, status="cleaned", provenance="observed",
+        source_type="citizen",
+    )
+    result = summarize_coordinates(
+        [open_mass, closure], LAT, LON, radius_m=100,
+        start=BASE - timedelta(minutes=1),
+        end=BASE + timedelta(hours=1),
+        authenticated_closure_digests=frozenset({closure_digest(closure)}),
+    )
+    assert result.excluded_unattested_closures == 0
+    assert result.current_mass_kg_low == 0
+    assert result.removed_mass_kg_low == 100
+
+
+def test_receipt_digest_rejects_tampered_timestamp_even_with_same_id():
+    closure = observation(
+        "receipt-id", 5, status="cleaned", provenance="observed",
+        source_type="citizen",
+    )
+    tampered = closure.model_copy(update={"observed_at": BASE + timedelta(minutes=6)})
+    assert closure_digest(closure) != closure_digest(tampered)
+    open_mass = observation(
+        "independent-mass", 0, status="open", provenance="measured",
+        source_type="partner", low=100, high=120,
+    )
+    result = summarize_coordinates(
+        [open_mass, tampered], LAT, LON, radius_m=100,
+        start=BASE - timedelta(minutes=1),
+        end=BASE + timedelta(hours=1),
+        authenticated_closure_digests=frozenset({closure_digest(closure)}),
+    )
+    assert result.excluded_unattested_closures == 1
+    assert result.current_mass_kg_low == 100
