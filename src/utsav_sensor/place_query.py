@@ -6,9 +6,9 @@ from functools import lru_cache
 import httpx
 from pydantic import BaseModel, Field
 
+from .closure_auth import closure_digest
 from .fusion import build_hotspots, cluster_observations, haversine_m
 from .models import Observation, Provenance
-from .closure_auth import closure_digest
 
 
 class GeocodedPlace(BaseModel):
