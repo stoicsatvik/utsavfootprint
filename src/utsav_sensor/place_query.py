@@ -101,19 +101,27 @@ def _track_ledger(track: list[Observation]) -> tuple[float, float, float, float,
         Provenance.MODELLED: 1,
     }
 
-    # Collapse near-simultaneous observations into 20-minute buckets and keep the
-    # strongest provenance record in each bucket. That cuts duplicate-photo noise.
-    buckets: dict[int, Observation] = {}
+    # Deduplicate near-simultaneous views only *within* a lifecycle phase.
+    # A cleanup and subsequent reopening may both happen in one 20-minute
+    # bucket; collapsing them would silently erase physical state transitions.
+    buckets: dict[tuple[int, int], Observation] = {}
     epoch = datetime(1970, 1, 1, tzinfo=UTC)
-    for obs in sorted(track, key=lambda o: o.observed_at):
+    phase = 0
+    previous_resolved: bool | None = None
+    for obs in sorted(track, key=lambda o: (o.observed_at, o.ingested_at, o.id)):
+        resolved = obs.status in {"cleaned", "verified"}
+        if previous_resolved is not None and resolved != previous_resolved:
+            phase += 1
+        previous_resolved = resolved
         bucket = int((obs.observed_at - epoch).total_seconds() // 1200)
-        current = buckets.get(bucket)
+        key = (phase, bucket)
+        current = buckets.get(key)
         if current is None or rank[obs.provenance] > rank[current.provenance] or (
             rank[obs.provenance] == rank[current.provenance] and obs.confidence > current.confidence
         ):
-            buckets[bucket] = obs
+            buckets[key] = obs
 
-    for obs in sorted(buckets.values(), key=lambda o: o.observed_at):
+    for obs in sorted(buckets.values(), key=lambda o: (o.observed_at, o.ingested_at, o.id)):
         if obs.status in {"cleaned", "verified"}:
             if not cleaned and had_mass:
                 removed_low += prev_low
