@@ -6,6 +6,7 @@ from functools import lru_cache
 import httpx
 from pydantic import BaseModel, Field
 
+from .closure_auth import closure_digest
 from .fusion import build_hotspots, cluster_observations, haversine_m
 from .models import Observation, Provenance
 
@@ -38,6 +39,7 @@ class PlaceWasteSummary(BaseModel):
     unresolved_waste_hours_high: float | None = None
     confidence: float = Field(ge=0, le=1)
     mass_basis_counts: dict[str, int]
+    excluded_unattested_closures: int = 0
     caveat: str
 
 
@@ -163,6 +165,7 @@ def summarize_coordinates(
     start: datetime | None = None,
     end: datetime | None = None,
     place: GeocodedPlace | None = None,
+    authenticated_closure_digests: frozenset[str] | None = None,
 ) -> PlaceWasteSummary:
     end = end or datetime.now(UTC)
     start = start or end - timedelta(hours=24)
@@ -177,6 +180,23 @@ def summarize_coordinates(
         if start <= o.observed_at <= end and haversine_m(lat, lon, o.lat, o.lon) <= radius_m
     ]
 
+    # Optional fail-closed accounting. An independently authenticated receipt
+    # registry must supply these digests; a producer's provenance label is not proof.
+    excluded_closures = 0
+    if authenticated_closure_digests is not None:
+        accepted = []
+        for obs in scoped:
+            if obs.status in {"cleaned", "verified"}:
+                try:
+                    attested = closure_digest(obs) in authenticated_closure_digests
+                except (TypeError, ValueError):
+                    attested = False
+                if not attested:
+                    excluded_closures += 1
+                    continue
+            accepted.append(obs)
+        scoped = accepted
+
     if not scoped:
         return PlaceWasteSummary(
             place=place,
@@ -190,7 +210,8 @@ def summarize_coordinates(
             hotspot_count=0,
             confidence=0.0,
             mass_basis_counts={},
-            caveat="No observations exist in this place/time window; zero observations is not proof of zero waste.",
+            excluded_unattested_closures=excluded_closures,
+            caveat="No eligible observations exist in this place/time window; zero observations is not proof of zero waste.",
         )
 
     # Spatial tracks persist across the whole query window. A smaller radius than
@@ -250,8 +271,11 @@ def summarize_coordinates(
         unresolved_waste_hours_high=uwh_high if have_any_mass else None,
         confidence=confidence,
         mass_basis_counts=basis_counts,
+        excluded_unattested_closures=excluded_closures,
         caveat=(
             "Generated mass is an evidence-led interval derived from observed state changes. "
-            "It is not a physical measurement unless the underlying provenance says measured/verified_official."
+            "It is not a physical measurement unless the underlying provenance says measured/verified_official. "
+            "Cleanup assertions are not authenticated by this model; use an independently "
+            "verified receipt registry for fail-closed closure accounting."
         ),
     )
