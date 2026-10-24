@@ -9,8 +9,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from utsav_sensor.models import Observation
 from utsav_sensor.closure_auth import closure_digest
+from utsav_sensor.models import Observation
 from utsav_sensor.place_query import summarize_coordinates
 
 BASE = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
