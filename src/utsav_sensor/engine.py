@@ -26,15 +26,20 @@ class SensorEngine:
     async def start(self) -> None:
         if self._store is None:
             return
-        await self._store.start()
-        stored = await self._store.all()
+        # Loading and ingestion must share one ordering boundary. Otherwise a
+        # delayed startup snapshot can overwrite a successfully persisted ingest.
         async with self._lock:
+            await self._store.start()
+            stored = await self._store.all()
             self._observations = {o.id: o for o in stored}
 
     async def ingest(self, observation: Observation) -> Observation:
-        if self._store is not None:
-            await self._store.upsert(observation)
+        # Serialize the durable write with its in-memory publication.
+        # A concurrent write of the same ID must not reorder the cache
+        # independently of the backing store. Failed writes publish nothing.
         async with self._lock:
+            if self._store is not None:
+                await self._store.upsert(observation)
             self._observations[observation.id] = observation
         states = await self.hotspots()
         for callback in list(self._listeners):
