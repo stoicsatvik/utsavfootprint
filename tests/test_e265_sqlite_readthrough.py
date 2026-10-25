@@ -4,8 +4,8 @@ All observations are synthetic and databases are disposable. A completed
 SQLite commit must be visible to the next read; a corrupt committed payload
 must fail closed instead of returning a stale engine-local snapshot.
 """
+import asyncio
 import sqlite3
-import subprocess
 import sys
 
 import pytest
@@ -45,19 +45,16 @@ with sqlite3.connect(sys.argv[1]) as db:
         (sys.argv[2], sys.argv[3], sys.argv[4], 'shared'),
     )
 """
-    subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            writer,
-            str(path),
-            updated.observed_at.isoformat(),
-            updated.ingested_at.isoformat(),
-            updated.model_dump_json(),
-        ],
-        check=True,
-        timeout=10,
+    process = await asyncio.create_subprocess_exec(
+        sys.executable,
+        "-c",
+        writer,
+        str(path),
+        updated.observed_at.isoformat(),
+        updated.ingested_at.isoformat(),
+        updated.model_dump_json(),
     )
+    assert await asyncio.wait_for(process.wait(), timeout=10) == 0
     records = await engine.observations()
     assert len(records) == 1
     assert records[0].source_id == "independent-process"
