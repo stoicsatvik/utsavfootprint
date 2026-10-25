@@ -1,8 +1,8 @@
-"""E252: real SQLite two-engine counterexamples, disposable database only.
+"""E252 historical counterexamples, now E265 corrected read-through controls.
 
-A per-instance asyncio lock cannot guarantee cross-instance cache consistency.
-Passing tests intentionally preserve the unsafe interleavings; they do not
-establish multi-replica safety or real sensor/cleanup authenticity.
+The earlier branch proved independent engine caches could disagree. These
+checks now require committed SQLite reads to observe completed writes.
+No live sensor data or cleanup authenticity is implied.
 """
 
 import pytest
@@ -27,7 +27,7 @@ def sample(source: str, oid: str = "shared", status: str = "open") -> Observatio
 
 
 @pytest.mark.asyncio
-async def test_same_id_two_engines_disagree_after_sequential_durable_writes(tmp_path):
+async def test_same_id_two_engines_reconcile_after_sequential_durable_writes(tmp_path):
     path = tmp_path / "two-engines.db"
     a = SensorEngine(SQLiteObservationStore(path))
     b = SensorEngine(SQLiteObservationStore(path))
@@ -36,26 +36,25 @@ async def test_same_id_two_engines_disagree_after_sequential_durable_writes(tmp_
 
     await a.ingest(sample("first"))
     assert (await a.observations())[0].source_id == "first"
-    assert await b.observations() == []  # second instance has no invalidation
+    assert (await b.observations())[0].source_id == "first"
 
     await b.ingest(sample("second", status="cleaned"))
     durable = await SQLiteObservationStore(path).all()
     assert len(durable) == 1
     assert durable[0].source_id == "second"
     assert durable[0].status == "cleaned"
-    assert (await a.observations())[0].source_id == "first"
-    assert (await a.observations())[0].status == "open"
+    assert (await a.observations())[0].source_id == "second"
+    assert (await a.observations())[0].status == "cleaned"
     assert (await b.observations())[0].source_id == "second"
 
-    # Explicit restart/reload can recover the durable snapshot, but it does
-    # not make reads linearizable while another engine is writing.
+    # Explicit restart remains valid but is no longer required to refresh.
     await a.start()
     assert (await a.observations())[0].source_id == durable[0].source_id
     assert (await a.observations())[0].status == durable[0].status
 
 
 @pytest.mark.asyncio
-async def test_distinct_ids_leave_each_instance_with_incomplete_hotspot_inputs(tmp_path):
+async def test_distinct_ids_are_visible_to_both_engines_after_commits(tmp_path):
     path = tmp_path / "disjoint-engines.db"
     a = SensorEngine(SQLiteObservationStore(path))
     b = SensorEngine(SQLiteObservationStore(path))
@@ -66,8 +65,8 @@ async def test_distinct_ids_leave_each_instance_with_incomplete_hotspot_inputs(t
     await b.ingest(sample("second", oid="second-id"))
     durable = await SQLiteObservationStore(path).all()
     assert {o.id for o in durable} == {"first-id", "second-id"}
-    assert {o.id for o in await a.observations()} == {"first-id"}
-    assert {o.id for o in await b.observations()} == {"second-id"}
+    assert {o.id for o in await a.observations()} == {"first-id", "second-id"}
+    assert {o.id for o in await b.observations()} == {"first-id", "second-id"}
 
     # Re-initialization reads the shared durable state. No cross-instance
     # cache synchronization is present between such explicit reloads.
