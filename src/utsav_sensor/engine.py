@@ -48,6 +48,16 @@ class SensorEngine:
 
     async def observations(self) -> list[Observation]:
         async with self._lock:
+            # SQLite can be shared by independently instantiated engines.
+            # Their asyncio locks are NOT shared. For stores explicitly
+            # supporting committed read-through, refresh under the local
+            # ordering lock before publishing a snapshot to callers.
+            # A failed read raises instead of silently serving stale state.
+            if self._store is not None:
+                read_snapshot = getattr(self._store, "read_snapshot", None)
+                if callable(read_snapshot):
+                    stored = await read_snapshot()
+                    self._observations = {o.id: o for o in stored}
             return sorted(self._observations.values(), key=lambda x: x.observed_at, reverse=True)
 
     async def hotspots(self) -> list[HotspotState]:

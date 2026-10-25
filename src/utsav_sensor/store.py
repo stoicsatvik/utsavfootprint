@@ -60,6 +60,16 @@ class SQLiteObservationStore:
     async def all(self) -> list[Observation]:
         return await asyncio.to_thread(self._all_sync)
 
+    async def read_snapshot(self) -> list[Observation]:
+        """Read the committed SQLite snapshot for cross-instance observers.
+
+        A single SELECT observes one SQLite statement snapshot. Callers must
+        not treat a previous engine-local cache as current after another
+        process commits. This intentionally pays O(number of observations)
+        per read until a revision-indexed protocol is proven safe.
+        """
+        return await self.all()
+
     def _all_sync(self) -> list[Observation]:
         if not self.path.exists():
             return []
