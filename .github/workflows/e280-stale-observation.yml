@@ -1,0 +1,23 @@
+name: E280 SQLite stale-observation replay
+on:
+  push:
+    branches: ["foundry/e280-stale-observation-replay-20261026"]
+  pull_request:
+    paths:
+      - "tests/test_e280_stale_observation_replay.py"
+      - ".github/workflows/e280-stale-observation.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[dev]"
+      - run: ruff check src tests
+      - run: pytest -q tests/test_e280_stale_observation_replay.py tests/test_e265_sqlite_readthrough.py tests/test_e252_cross_instance_sqlite_staleness.py
