@@ -1,0 +1,34 @@
+name: E296 causal revision vs event log
+
+on:
+  pull_request:
+    paths:
+      - "research/e296_revision_cas_vs_append_only.py"
+      - "research/E296_REVISION_CAS_VS_APPEND_ONLY.md"
+      - "tests/test_e296_revision_cas_vs_append_only.py"
+      - ".github/workflows/e296-revision-cas.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  revision-prototype:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install pytest
+      - name: Test SQLite transaction and replay counterexamples
+        run: PYTHONPATH=. pytest -q tests/test_e296_revision_cas_vs_append_only.py
+      - name: Execute deterministic evidence receipt
+        run: python -m research.e296_revision_cas_vs_append_only
+      - name: Upload synthetic-only evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: e296-revision-cas-vs-append-only
+          path: research/results/e296_revision_cas_vs_append_only.json
+          if-no-files-found: error
