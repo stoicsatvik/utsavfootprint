@@ -42,6 +42,18 @@ def observation_strength(obs: Observation, now: datetime) -> float:
     )
 
 
+def _mean_longitude(observations: list[Observation], weights: list[float] | None = None) -> float:
+    """Circular mean: +/-180 degrees are adjacent, not opposite sides of the globe."""
+    if weights is None:
+        weights = [1.0] * len(observations)
+    sin_sum = sum(math.sin(math.radians(o.lon)) * w for o, w in zip(observations, weights, strict=True))
+    cos_sum = sum(math.cos(math.radians(o.lon)) * w for o, w in zip(observations, weights, strict=True))
+    if abs(sin_sum) < 1e-12 and abs(cos_sum) < 1e-12:
+        # Undefined circular mean (antipodal or zero-weight data): retain a real location.
+        return observations[0].lon
+    return math.degrees(math.atan2(sin_sum, cos_sum))
+
+
 def cluster_observations(
     observations: list[Observation], radius_m: float = 120.0, window_hours: float = 24.0
 ) -> list[list[Observation]]:
@@ -55,7 +67,7 @@ def cluster_observations(
             if abs((obs.observed_at - newest).total_seconds()) > window_hours * 3600:
                 continue
             c_lat = sum(o.lat for o in c) / len(c)
-            c_lon = sum(o.lon for o in c) / len(c)
+            c_lon = _mean_longitude(c)
             d = haversine_m(obs.lat, obs.lon, c_lat, c_lon)
             if d <= radius_m and d < best_d:
                 best, best_d = c, d
@@ -98,9 +110,12 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     now = now or datetime.now(UTC)
 
     strengths = [observation_strength(o, now) for o in cluster]
-    total_s = sum(strengths) or 1.0
-    lat = sum(o.lat * s for o, s in zip(cluster, strengths, strict=True)) / total_s
-    lon = sum(o.lon * s for o, s in zip(cluster, strengths, strict=True)) / total_s
+    # A zero-confidence observation still has a location; zero evidence must not
+    # move the hotspot to (0, 0). Confidence itself remains zero.
+    position_weights = strengths if sum(strengths) > 0 else [1.0] * len(cluster)
+    total_s = sum(position_weights)
+    lat = sum(o.lat * s for o, s in zip(cluster, position_weights, strict=True)) / total_s
+    lon = _mean_longitude(cluster, position_weights)
 
     strongest_by_source: dict[str, float] = {}
     for o, s in zip(cluster, strengths, strict=True):
