@@ -3,7 +3,6 @@ import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-
 from runpy import run_path
 
 # Full-repository pytest may omit the repository root from sys.path.
