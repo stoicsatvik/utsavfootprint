@@ -3,8 +3,8 @@
 All records are deliberately synthetic. Read-through is a visibility guarantee,
 not a causal-revision or physical-cleanup authenticity guarantee.
 """
-from datetime import UTC, datetime, timedelta
 import sqlite3
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
