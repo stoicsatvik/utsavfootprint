@@ -5,7 +5,11 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from research.e296_revision_cas_vs_append_only import (
-    append_event, cas_mutation, initialize, run, snapshot,
+    append_event,
+    cas_mutation,
+    initialize,
+    run,
+    snapshot,
 )
 
 
