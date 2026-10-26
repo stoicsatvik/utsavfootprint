@@ -11,6 +11,7 @@ import pytest
 from utsav_sensor.engine import SensorEngine
 from utsav_sensor.models import Observation
 from utsav_sensor.store import SQLiteObservationStore
+
 T0 = datetime(2026, 10, 25, 12, tzinfo=UTC)
 
 
