@@ -4,13 +4,17 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from research.e296_revision_cas_vs_append_only import (
-    append_event,
-    cas_mutation,
-    initialize,
-    run,
-    snapshot,
-)
+from runpy import run_path
+
+# Full-repository pytest may omit the repository root from sys.path.
+# Load this isolated research script by path without changing application imports.
+experiment = run_path(str(Path(__file__).resolve().parents[1] /
+                          "research/e296_revision_cas_vs_append_only.py"), run_name="e296_test")
+append_event = experiment["append_event"]
+cas_mutation = experiment["cas_mutation"]
+initialize = experiment["initialize"]
+run = experiment["run"]
+snapshot = experiment["snapshot"]
 
 
 def test_delayed_writer_rejected_and_idempotent_ack(tmp_path: Path):
