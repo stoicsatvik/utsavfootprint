@@ -102,7 +102,7 @@ def connected_components_oracle(observations, radius_m=120.0, window_hours=24.0)
         first = min(remaining)
         group = [remaining.pop(first)]
         for obs in group:
-            for key in sorted(list(remaining)):
+            for key in sorted(remaining):
                 candidate = remaining[key]
                 dt = abs((obs.observed_at - candidate.observed_at).total_seconds())
                 if dt <= window_hours * 3600 and haversine_m(
