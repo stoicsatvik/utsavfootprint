@@ -42,16 +42,36 @@ def observation_strength(obs: Observation, now: datetime) -> float:
     )
 
 
-def _mean_longitude(observations: list[Observation], weights: list[float] | None = None) -> float:
-    """Circular mean: +/-180 degrees are adjacent, not opposite sides of the globe."""
+def _spherical_centroid(
+    observations: list[Observation], weights: list[float] | None = None
+) -> tuple[float, float]:
+    """Weighted unit-sphere centroid; handles dateline and high-latitude geometry.
+
+    For an undefined antipodal resultant, retain a real source location
+    selected by stable ID, not by ingestion/list order.
+    """
+    if not observations:
+        raise ValueError("cannot locate empty observations")
     if weights is None:
         weights = [1.0] * len(observations)
-    sin_sum = sum(math.sin(math.radians(o.lon)) * w for o, w in zip(observations, weights, strict=True))
-    cos_sum = sum(math.cos(math.radians(o.lon)) * w for o, w in zip(observations, weights, strict=True))
-    if abs(sin_sum) < 1e-12 and abs(cos_sum) < 1e-12:
-        # Undefined circular mean (antipodal or zero-weight data): retain a real location.
-        return observations[0].lon
-    return math.degrees(math.atan2(sin_sum, cos_sum))
+    if len(weights) != len(observations) or any(
+        not math.isfinite(w) or w < 0 for w in weights
+    ):
+        raise ValueError("invalid positional weights")
+    x = y = z = 0.0
+    for obs, weight in zip(observations, weights, strict=True):
+        latitude, longitude = math.radians(obs.lat), math.radians(obs.lon)
+        x += weight * math.cos(latitude) * math.cos(longitude)
+        y += weight * math.cos(latitude) * math.sin(longitude)
+        z += weight * math.sin(latitude)
+    anchor = min(observations, key=lambda obs: obs.id)
+    if math.sqrt(x * x + y * y + z * z) < 1e-12:
+        return anchor.lat, anchor.lon
+    horizontal = math.hypot(x, y)
+    latitude = math.degrees(math.atan2(z, horizontal))
+    longitude = (math.degrees(math.atan2(y, x))
+                 if horizontal >= 1e-12 else anchor.lon)
+    return latitude, longitude
 
 
 def cluster_observations(
@@ -66,8 +86,7 @@ def cluster_observations(
             newest = max(o.observed_at for o in c)
             if abs((obs.observed_at - newest).total_seconds()) > window_hours * 3600:
                 continue
-            c_lat = sum(o.lat for o in c) / len(c)
-            c_lon = _mean_longitude(c)
+            c_lat, c_lon = _spherical_centroid(c)
             d = haversine_m(obs.lat, obs.lon, c_lat, c_lon)
             if d <= radius_m and d < best_d:
                 best, best_d = c, d
@@ -113,9 +132,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     # A zero-confidence observation still has a location; zero evidence must not
     # move the hotspot to (0, 0). Confidence itself remains zero.
     position_weights = strengths if sum(strengths) > 0 else [1.0] * len(cluster)
-    total_s = sum(position_weights)
-    lat = sum(o.lat * s for o, s in zip(cluster, position_weights, strict=True)) / total_s
-    lon = _mean_longitude(cluster, position_weights)
+    lat, lon = _spherical_centroid(cluster, position_weights)
 
     strongest_by_source: dict[str, float] = {}
     for o, s in zip(cluster, strengths, strict=True):
