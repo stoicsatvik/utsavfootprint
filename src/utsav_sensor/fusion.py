@@ -77,14 +77,28 @@ def _spherical_centroid(
 def cluster_observations(
     observations: list[Observation], radius_m: float = 120.0, window_hours: float = 24.0
 ) -> list[list[Observation]]:
-    """Greedy deterministic spatiotemporal clustering."""
+    """Greedy clustering with pairwise spatial and full temporal-span bounds.
+
+    A centroid-only radius can absorb observations more than radius_m apart.
+    A newest-only time check can similarly chain reports over many windows.
+    These guards prevent both, but the greedy choice can still depend on
+    stable observation IDs. This does not prove a shared physical pile.
+    """
     clusters: list[list[Observation]] = []
     for obs in sorted(observations, key=lambda x: (x.observed_at, x.id)):
         best: list[Observation] | None = None
         best_d = float("inf")
         for c in clusters:
+            oldest = min(o.observed_at for o in c)
             newest = max(o.observed_at for o in c)
-            if abs((obs.observed_at - newest).total_seconds()) > window_hours * 3600:
+            if (
+                max(obs.observed_at, newest) - min(obs.observed_at, oldest)
+            ).total_seconds() > window_hours * 3600:
+                continue
+            if any(
+                haversine_m(obs.lat, obs.lon, other.lat, other.lon) > radius_m
+                for other in c
+            ):
                 continue
             c_lat, c_lon = _spherical_centroid(c)
             d = haversine_m(obs.lat, obs.lon, c_lat, c_lon)
