@@ -35,6 +35,10 @@ The guard can split a real physical pile that extends beyond 120 m. No source-de
 
 Run `pytest -q tests/test_e336_cluster_linkage.py`, then `ruff check src tests scripts && pytest -q`. The seeded 64-case fuzz control checks that no output cluster exceeds the configured spatial or temporal caps and that all observations are represented once. No network access or external dataset is needed.
 
-**Claim:** Pre-E336 radius/time-span invariants REJECTED by exact synthetic counterexamples. E336 caps SUPPORTED IN TESTED SOFTWARE once exact-head CI passes. Hotspot truth, independence, physical mass and field accuracy NOT YET PROVEN.
+**Claim:** Pre-E336 radius/time-span invariants REJECTED by exact synthetic counterexamples. E336 caps SUPPORTED IN TESTED SOFTWARE by exact-head CI. Hotspot truth, independence, physical mass and field accuracy NOT YET PROVEN.
 
 **Next:** Compare independent complete-link, density-based and ID-invariant clustering on consented/authorised geolocated observations with verified duplicate/nonduplicate labels; quantify overmerge/oversplit and hotspot-ID stability before any deployment.
+
+## Exact-head CI receipt
+
+[Actions run #40552217449](https://github.com/stoicsatvik/utsavfootprint/actions/runs/40552217449) passed Ruff and the complete 25-test suite on commit `6a525580502bbae5df35b3d4699791cf119f7de8`. The first test-containing push failed Ruff C414 (unnecessary list around sorted); this was corrected without deleting the failure history. The source-only push passed before tests were added. This receipt validates the same experiment code; the report-only commit after it does not change executable code.
