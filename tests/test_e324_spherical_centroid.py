@@ -4,8 +4,11 @@ from datetime import UTC, datetime
 import pytest
 
 from utsav_sensor.fusion import (
-    _spherical_centroid, build_hotspots, cluster_observations,
-    fuse_cluster, haversine_m,
+    _spherical_centroid,
+    build_hotspots,
+    cluster_observations,
+    fuse_cluster,
+    haversine_m,
 )
 from utsav_sensor.models import Observation
 
