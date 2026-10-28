@@ -81,11 +81,38 @@ def cluster_observations(
 
     A centroid-only radius can absorb observations more than radius_m apart.
     A newest-only time check can similarly chain reports over many windows.
-    These guards prevent both, but the greedy choice can still depend on
-    stable observation IDs. This does not prove a shared physical pile.
+    These guards prevent both. Canonical time/physical-coordinate ordering
+    avoids arbitrary ID-based partitions for distinct positions; it is still
+    a greedy heuristic, not physical pile identity or perturbation stability.
     """
     clusters: list[list[Observation]] = []
-    for obs in sorted(observations, key=lambda x: (x.observed_at, x.id)):
+    if not observations:
+        return clusters
+
+    # Place the longitude seam in the largest unoccupied circular gap so
+    # neighbouring reports across the antimeridian retain spatial order.
+    longitudes = sorted({o.lon % 360.0 for o in observations})
+    if len(longitudes) == 1:
+        longitude_origin = longitudes[0]
+    else:
+        seam = max(
+            range(len(longitudes)),
+            key=lambda i: (
+                (longitudes[(i + 1) % len(longitudes)] - longitudes[i]) % 360.0,
+                -i,
+            ),
+        )
+        longitude_origin = longitudes[(seam + 1) % len(longitudes)]
+
+    for obs in sorted(
+        observations,
+        key=lambda o: (
+            o.observed_at,
+            o.lat,
+            (o.lon % 360.0 - longitude_origin) % 360.0,
+            o.id,  # only breaks ties between physically coincident observations
+        ),
+    ):
         best: list[Observation] | None = None
         best_d = float("inf")
         for c in clusters:
