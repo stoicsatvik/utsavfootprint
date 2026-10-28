@@ -221,3 +221,42 @@ def test_seeded_spatiotemporal_invariants_without_ground_truth():
             tuple(sorted(o.id for o in group))
             for group in cluster_observations(list(reversed(reports)))
         }
+
+
+@pytest.mark.parametrize("base_lon", [72.8777, 179.999])
+def test_microsecond_timestamp_jitter_changes_ambiguous_greedy_partition(base_lon):
+    """A 2-microsecond total timing spread can change physical grouping.
+
+    This is a preserved negative robustness result, not a failing test.
+    Both partitions obey the spatial and temporal caps.
+    """
+    original = [
+        point(name, east_m, base_lon=base_lon)
+        for name, east_m in zip(("a", "b", "c"), (0, 100, 200), strict=True)
+    ]
+    jittered = [
+        original[0].model_copy(
+            update={"observed_at": NOW + timedelta(microseconds=1)}
+        ),
+        original[1],
+        original[2].model_copy(
+            update={"observed_at": NOW - timedelta(microseconds=1)}
+        ),
+    ]
+
+    def memberships(reports):
+        return {
+            tuple(sorted(o.id for o in group))
+            for group in cluster_observations(reports)
+        }
+
+    assert memberships(original) == {("a", "b"), ("c",)}
+    assert memberships(jittered) == {("a",), ("b", "c")}
+    assert memberships(jittered) == memberships(list(reversed(jittered)))
+    assert [o.lat for o in original] == [o.lat for o in jittered]
+    assert [o.lon for o in original] == [o.lon for o in jittered]
+    for reports in (original, jittered):
+        groups = cluster_observations(reports)
+        assert sum(len(group) for group in groups) == 3
+        assert all(diameter(group) <= 120.0 for group in groups)
+        assert all(span_hours(group) <= 24.0 for group in groups)
