@@ -24,3 +24,25 @@ pytest -q
 **Claim:** Pre-E349 ID-independent partitioning REJECTED by six exact synthetic permutations. Post-E349 ID-independent physical partitioning for the tested distinct-position fixtures is SUPPORTED IN TESTED SOFTWARE once CI passes. Real-world overmerge, oversplit, temporal continuity, and hotspot identity NOT YET PROVEN.
 
 **Next:** Compare against order-invariant complete-link and density methods on authorized independently labeled duplicate/nonduplicate observations, measuring error, latency and hotspot-ID continuity. No deployment or main merge.
+
+
+## Follow-on negative control: timestamp perturbation
+
+A deterministic two-geometry regression now tests the same three physically fixed
+observations at eastward offsets 0/100/200 m, both at ordinary longitude and across
+the antimeridian. With simultaneous timestamps, greedy grouping pairs the 0 m and
+100 m observations. Moving only the 0 m timestamp forward by one microsecond
+and the 200 m timestamp backward by one microsecond reverses the processing
+order and instead pairs the 100 m and 200 m observations. Spatial coordinates,
+IDs, sources, evidence strengths, and the 120 m/24 h caps are unchanged.
+Reversing input order does not repair the difference.
+
+**Negative result:** ID-renaming invariance is not temporal-perturbation stability.
+Even a 2-microsecond total observation-time spread can change the membership
+of an ambiguous spatial chain. This is an algorithmic synthetic counterexample,
+not a claim that a two-microsecond sensor error has been measured in the field.
+The current implementation is deliberately unchanged: changing clustering
+policy without independent duplicate/nonduplicate labels risks substituting
+one arbitrary identity assumption for another. Future work should quantify
+partition stability under predeclared location/time noise distributions and
+measure identity error and continuity on authorized labeled data.
