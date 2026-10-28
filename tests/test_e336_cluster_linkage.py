@@ -4,6 +4,7 @@ All observations are synthetic. Pairwise caps are a conservative contract,
 not proof of one physical pile or a measured waste-detection accuracy.
 """
 
+import itertools
 import math
 import random
 from datetime import UTC, datetime, timedelta
@@ -158,20 +159,44 @@ def test_polar_and_dateline_close_pairs_remain_grouped():
     assert len(cluster_observations(dateline)) == 1
 
 
-def test_renaming_can_still_change_greedy_partition_negative_result():
-    original = [point("a", 0), point("b", 100), point("c", 200)]
-    renamed = [
-        o.model_copy(update={"id": name, "source_id": name})
-        for o, name in zip(original, ["c", "b", "a"], strict=True)
-    ]
-    def positions(groups):
+@pytest.mark.parametrize("base_lon", [72.8777, 179.999])
+def test_distinct_positions_have_id_invariant_partition(base_lon):
+    """Six ID assignments cannot change the same three physical observations."""
+    original = [point(str(i), m, base_lon=base_lon) for i, m in enumerate([0, 100, 200])]
+
+    def spatial_partition(groups):
         return sorted(
-            tuple(sorted(round((o.lon - 72.8777) * math.pi / 180 * EARTH_RADIUS_M)
+            tuple(sorted(round(haversine_m(o.lat, o.lon, original[0].lat, original[0].lon))
                          for o in group))
             for group in groups
         )
-    assert positions(cluster_observations(original)) != positions(cluster_observations(renamed))
-    assert all(diameter(group) <= 120 for group in cluster_observations(renamed))
+
+    reference = spatial_partition(cluster_observations(original))
+    assert reference == [(0, 100), (200,)]
+    for names in itertools.permutations(("a", "b", "c")):
+        renamed = [
+            o.model_copy(update={"id": name, "source_id": name})
+            for o, name in zip(original, names, strict=True)
+        ]
+        assert spatial_partition(cluster_observations(renamed)) == reference
+        assert spatial_partition(cluster_observations(list(reversed(renamed)))) == reference
+        assert all(diameter(group) <= 120 for group in cluster_observations(renamed))
+
+
+def test_canonical_sort_is_not_a_ground_truth_identity_model():
+    """The 0/100/200 chain remains ambiguous without physical pile labels."""
+    reports = [point(str(i), m) for i, m in enumerate((0, 100, 200))]
+    groups = cluster_observations(reports)
+    assert sorted(len(group) for group in groups) == [1, 2]
+    assert all(diameter(group) <= 120 for group in groups)
+    # An equally valid bounded partition pairs 100 and 200 instead.
+    alternative = [[reports[0]], [reports[1], reports[2]]]
+    assert all(diameter(group) <= 120 for group in alternative)
+    assert spatial_signature(groups) != spatial_signature(alternative)
+
+
+def spatial_signature(groups):
+    return sorted(tuple(sorted(round(o.lon, 8) for o in group)) for group in groups)
 
 
 def test_seeded_spatiotemporal_invariants_without_ground_truth():
@@ -196,3 +221,42 @@ def test_seeded_spatiotemporal_invariants_without_ground_truth():
             tuple(sorted(o.id for o in group))
             for group in cluster_observations(list(reversed(reports)))
         }
+
+
+@pytest.mark.parametrize("base_lon", [72.8777, 179.999])
+def test_microsecond_timestamp_jitter_changes_ambiguous_greedy_partition(base_lon):
+    """A 2-microsecond total timing spread can change physical grouping.
+
+    This is a preserved negative robustness result, not a failing test.
+    Both partitions obey the spatial and temporal caps.
+    """
+    original = [
+        point(name, east_m, base_lon=base_lon)
+        for name, east_m in zip(("a", "b", "c"), (0, 100, 200), strict=True)
+    ]
+    jittered = [
+        original[0].model_copy(
+            update={"observed_at": NOW + timedelta(microseconds=1)}
+        ),
+        original[1],
+        original[2].model_copy(
+            update={"observed_at": NOW - timedelta(microseconds=1)}
+        ),
+    ]
+
+    def memberships(reports):
+        return {
+            tuple(sorted(o.id for o in group))
+            for group in cluster_observations(reports)
+        }
+
+    assert memberships(original) == {("a", "b"), ("c",)}
+    assert memberships(jittered) == {("a",), ("b", "c")}
+    assert memberships(jittered) == memberships(list(reversed(jittered)))
+    assert [o.lat for o in original] == [o.lat for o in jittered]
+    assert [o.lon for o in original] == [o.lon for o in jittered]
+    for reports in (original, jittered):
+        groups = cluster_observations(reports)
+        assert sum(len(group) for group in groups) == 3
+        assert all(diameter(group) <= 120.0 for group in groups)
+        assert all(span_hours(group) <= 24.0 for group in groups)
