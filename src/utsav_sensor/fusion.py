@@ -138,6 +138,28 @@ def cluster_observations(
     return clusters
 
 
+
+def _representatives_by_source(
+    observations: list[Observation], now: datetime
+) -> list[Observation]:
+    """Use one strongest report per source in evidence-weighted fusion.
+
+    A replay of identical evidence must not acquire extra voting power.
+    Stronger or fresher reports from the same source can replace earlier ones;
+    this is not an identity-resolution or sensor-independence guarantee.
+    """
+    selected: dict[str, Observation] = {}
+    for obs in observations:
+        previous = selected.get(obs.source_id)
+        if previous is None or (
+            observation_strength(obs, now), obs.observed_at, obs.id
+        ) > (
+            observation_strength(previous, now), previous.observed_at, previous.id
+        ):
+            selected[obs.source_id] = obs
+    return list(selected.values())
+
+
 def _fuse_mass(cluster: list[Observation], now: datetime):
     candidates = [o for o in cluster if o.mass_kg_low is not None and o.mass_kg_high is not None]
     if not candidates:
@@ -152,6 +174,7 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
     }
     best_rank = max(rank[o.provenance] for o in candidates)
     candidates = [o for o in candidates if rank[o.provenance] == best_rank]
+    candidates = _representatives_by_source(candidates, now)
 
     weighted = []
     for o in candidates:
@@ -170,10 +193,17 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     now = now or datetime.now(UTC)
 
     strengths = [observation_strength(o, now) for o in cluster]
+    representatives = _representatives_by_source(cluster, now)
+    representative_strengths = [observation_strength(o, now) for o in representatives]
     # A zero-confidence observation still has a location; zero evidence must not
     # move the hotspot to (0, 0). Confidence itself remains zero.
-    position_weights = strengths if sum(strengths) > 0 else [1.0] * len(cluster)
-    lat, lon = _spherical_centroid(cluster, position_weights)
+    # Repeated reports from one source cannot multiply its position weight.
+    position_weights = (
+        representative_strengths
+        if sum(representative_strengths) > 0
+        else [1.0] * len(representatives)
+    )
+    lat, lon = _spherical_centroid(representatives, position_weights)
 
     strongest_by_source: dict[str, float] = {}
     for o, s in zip(cluster, strengths, strict=True):
@@ -188,7 +218,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
-    for o, s in zip(cluster, strengths, strict=True):
+    for o, s in zip(representatives, representative_strengths, strict=True):
         for k, p in o.materials.items():
             material_num[k] += p * s
             material_den[k] += s
