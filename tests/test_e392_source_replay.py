@@ -14,7 +14,9 @@ from utsav_sensor.models import Observation
 NOW = datetime(2026, 10, 29, 12, tzinfo=UTC)
 
 
-def observation(source: str, index: int, latitude: float, material: float, mass: float) -> Observation:
+def observation(
+    source: str, index: int, latitude: float, material: float, mass: float
+) -> Observation:
     return Observation(
         id=f"{source}-{index:03d}",
         source_type="citizen",
@@ -66,3 +68,19 @@ def test_identical_replay_cannot_shift_material_or_centroid():
     assert replayed.lat == pytest.approx(baseline.lat, abs=1e-12)
     assert replayed.lon == pytest.approx(baseline.lon, abs=1e-12)
     assert replayed.confidence == pytest.approx(baseline.confidence, abs=1e-12)
+
+
+def test_genuinely_independent_fourth_source_can_change_fusion():
+    original = [
+        observation("a", 0, 19.07600, 0.0, 10),
+        observation("b", 0, 19.07605, 0.5, 20),
+        observation("c", 0, 19.07610, 1.0, 30),
+    ]
+    baseline = fuse_cluster(original, NOW)
+    independent = fuse_cluster(
+        original + [observation("d", 0, 19.07610, 1.0, 30)], NOW
+    )
+    assert independent.independent_sources == 4
+    assert independent.mass_kg_low == 25
+    assert independent.materials["plastic"] > baseline.materials["plastic"]
+    assert independent.lat > baseline.lat
