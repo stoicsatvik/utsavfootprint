@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
@@ -45,8 +46,8 @@ class Observation(BaseModel):
     @field_validator("materials")
     @classmethod
     def material_probs(cls, value: dict[str, float]) -> dict[str, float]:
-        if any(v < 0 or v > 1 for v in value.values()):
-            raise ValueError("material probabilities must be in [0, 1]")
+        if any(not math.isfinite(v) or v < 0 or v > 1 for v in value.values()):
+            raise ValueError("material probabilities must be finite and in [0, 1]")
         return value
 
     @model_validator(mode="after")
