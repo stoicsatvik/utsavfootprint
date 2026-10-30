@@ -75,9 +75,11 @@ class HotspotState(BaseModel):
     mass_kg_low: float | None = None
     mass_kg_high: float | None = None
     mass_basis: Provenance | None = None
-    unresolved_hours: float = Field(ge=0)
-    unresolved_waste_hours_low: float | None = None
-    unresolved_waste_hours_high: float | None = None
+    unresolved_hours: float = Field(ge=0, allow_inf_nan=False)
+    unresolved_waste_hours_low: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    unresolved_waste_hours_high: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    # True means at least one derived mass-hour product overflowed, not missing evidence.
+    unresolved_waste_hours_overflow: bool = False
     observation_ids: list[str]
 
 
