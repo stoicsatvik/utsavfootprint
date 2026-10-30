@@ -305,3 +305,23 @@ def build_hotspots(observations: list[Observation], now: datetime | None = None)
         if -FUTURE_CLOCK_SKEW_SECONDS <= (now - o.observed_at).total_seconds() <= 72 * 3600
     ]
     return [fuse_cluster(c, now) for c in cluster_observations(active)]
+
+
+def build_hotspots_as_of(
+    observations: list[Observation], as_of: datetime
+) -> list[HotspotState]:
+    """Reconstruct a strict historical snapshot from append-only observations.
+
+    A record is eligible only after *both* its event time and ingestion time.
+    Unlike the live `build_hotspots` view, no future clock-skew allowance is
+    applied. This prevents hindsight leakage from backfilled observations.
+
+    This is an opt-in research/history helper: it assumes immutable, complete
+    observation records. It does not reconstruct historical edits/deletions,
+    authenticate provenance, or alter the live clock-skew policy.
+    """
+    eligible = [
+        o for o in observations
+        if o.observed_at <= as_of and o.ingested_at <= as_of
+    ]
+    return build_hotspots(eligible, now=as_of)
