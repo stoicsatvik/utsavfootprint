@@ -187,6 +187,43 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
     return low, high, basis
 
 
+def _resolution_episode(
+    cluster: list[Observation], now: datetime
+) -> tuple[str, float]:
+    """Resolve status and duration from chronological, declared-provenance events.
+
+    An older open report cannot keep a subsequently *declared measured/official*
+    cleanup unresolved forever. A later open report starts a new episode.
+    A citizen's unverified cleanup assertion alone cannot close a hotspot.
+    Same-time open and closure remain unresolved conservatively.
+
+    Provenance labels are NOT authenticated here: ingestion authorization and
+    physical cleanup verification remain independent system requirements.
+    """
+    terminal = {"cleaned", "verified"}
+    closure_provenance = {Provenance.MEASURED, Provenance.VERIFIED_OFFICIAL}
+    closures = [
+        o for o in cluster
+        if o.status in terminal and o.provenance in closure_provenance
+    ]
+    last_closure_time = max((o.observed_at for o in closures), default=None)
+    pending = [
+        o for o in cluster
+        if o.status not in terminal
+        and (last_closure_time is None or o.observed_at >= last_closure_time)
+    ]
+    if pending:
+        latest = max(pending, key=lambda o: (o.observed_at, o.id))
+        since = min(o.observed_at for o in pending)
+        return latest.status, max(0.0, (now - since).total_seconds() / 3600)
+    if closures:
+        latest = max(closures, key=lambda o: (o.observed_at, o.id))
+        return latest.status, 0.0
+    # No declared credible closure, including the all-unverified-closed case.
+    since = min(o.observed_at for o in cluster)
+    return "open", max(0.0, (now - since).total_seconds() / 3600)
+
+
 def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> HotspotState:
     if not cluster:
         raise ValueError("cannot fuse empty cluster")
@@ -229,17 +266,13 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     }
 
     low, high, basis = _fuse_mass(cluster, now)
-    unresolved = any(o.status not in {"cleaned", "verified"} for o in cluster)
-    first_open = min(o.observed_at for o in cluster)
-    unresolved_hours = max(0.0, (now - first_open).total_seconds() / 3600) if unresolved else 0.0
-
-    latest = max(cluster, key=lambda o: o.observed_at)
+    effective_status, unresolved_hours = _resolution_episode(cluster, now)
     hotspot_id = "hs_" + min(o.id for o in cluster).replace("-", "")[:16]
     return HotspotState(
         id=hotspot_id,
         lat=lat,
         lon=lon,
-        status=latest.status,
+        status=effective_status,
         observation_count=len(cluster),
         independent_sources=len(strongest_by_source),
         last_observed_at=last_seen,
