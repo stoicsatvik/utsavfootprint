@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 
 class Provenance(StrEnum):
@@ -32,8 +32,9 @@ class Observation(BaseModel):
     source_id: str = Field(min_length=1, max_length=200)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
-    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    ingested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    observed_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
+    ingested_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
+
     confidence: float = Field(default=0.5, ge=0, le=1)
     media_quality: float = Field(default=1.0, ge=0, le=1)
     materials: dict[str, float] = Field(default_factory=dict)
@@ -42,6 +43,14 @@ class Observation(BaseModel):
     status: str = Field(default="open", pattern="^(open|claimed|cleaning|cleaned|verified|candidate)$")
     external_ref: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("observed_at", "ingested_at")
+    @classmethod
+    def canonicalize_utc(cls, value: datetime) -> datetime:
+        # AwareDatetime rejects ambiguous naive input before this validator.
+        # Canonical UTC matches the earlier E175 contract and keeps stored
+        # timestamps comparable even when producers use different offsets.
+        return value.astimezone(UTC)
 
     @field_validator("materials")
     @classmethod
