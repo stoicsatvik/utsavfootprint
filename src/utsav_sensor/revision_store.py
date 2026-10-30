@@ -10,7 +10,11 @@ from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
 
-from .history import ObservationRevision, build_hotspots_from_revisions_as_of, replay_observation_revisions
+from .history import (
+    ObservationRevision,
+    build_hotspots_from_revisions_as_of,
+    replay_observation_revisions,
+)
 from .models import HotspotState, Observation
 
 

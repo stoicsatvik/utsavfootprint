@@ -62,11 +62,12 @@ async def test_start_adds_guard_to_preexisting_ledger(tmp_path):
     with sqlite3.connect(ledger.path) as db:
         db.execute("DROP TRIGGER revision_no_replace")  # Simulate E415 schema.
     await ledger.start()  # Additive migration, no existing receipt rewritten.
-    with sqlite3.connect(ledger.path) as db:
-        with pytest.raises(sqlite3.IntegrityError, match="sequence already exists"):
-            db.execute(
-                "INSERT OR REPLACE INTO observation_revisions "
-                "(sequence, recorded_at, observation_id, payload) VALUES (1, ?, ?, ?)",
-                (datetime.now(UTC).isoformat(), "forged", None),
-            )
+    with sqlite3.connect(ledger.path) as db, pytest.raises(
+        sqlite3.IntegrityError, match="sequence already exists"
+    ):
+        db.execute(
+            "INSERT OR REPLACE INTO observation_revisions "
+            "(sequence, recorded_at, observation_id, payload) VALUES (1, ?, ?, ?)",
+            (datetime.now(UTC).isoformat(), "forged", None),
+        )
     assert (await ledger.revisions(expected_head_sequence=1))[0].observation_id == "original"
