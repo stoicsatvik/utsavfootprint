@@ -7,6 +7,8 @@ from statistics import median
 
 from .models import HotspotState, Observation, Provenance
 
+FUTURE_CLOCK_SKEW_SECONDS = 300.0  # Explicit tolerance for minor sensor clock skew.
+
 PROVENANCE_WEIGHT = {
     Provenance.VERIFIED_OFFICIAL: 1.00,
     Provenance.MEASURED: 0.98,
@@ -228,6 +230,11 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     if not cluster:
         raise ValueError("cannot fuse empty cluster")
     now = now or datetime.now(UTC)
+    # Direct fusion must not let a future event rewrite an as-of snapshot.
+    # Ingest may retain such records for later evaluation; the current view
+    # rejects timestamps beyond the explicit five-minute skew tolerance.
+    if any((o.observed_at - now).total_seconds() > FUTURE_CLOCK_SKEW_SECONDS for o in cluster):
+        raise ValueError("future-dated observation exceeds clock-skew tolerance")
 
     strengths = [observation_strength(o, now) for o in cluster]
     representatives = _representatives_by_source(cluster, now)
@@ -291,5 +298,10 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
 def build_hotspots(observations: list[Observation], now: datetime | None = None) -> list[HotspotState]:
     now = now or datetime.now(UTC)
-    active = [o for o in observations if (now - o.observed_at).total_seconds() <= 72 * 3600]
+    # Future events outside tolerated clock skew are not current evidence.
+    # Do not mutate the observation store: they can become eligible later.
+    active = [
+        o for o in observations
+        if -FUTURE_CLOCK_SKEW_SECONDS <= (now - o.observed_at).total_seconds() <= 72 * 3600
+    ]
     return [fuse_cluster(c, now) for c in cluster_observations(active)]
