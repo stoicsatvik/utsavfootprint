@@ -45,6 +45,21 @@ class SQLiteRevisionLedger:
                 BEFORE DELETE ON observation_revisions
                 BEGIN SELECT RAISE(ABORT, 'revision ledger is append-only'); END
             """)
+            # SQLite's INSERT OR REPLACE can implicitly delete an existing
+            # primary-key row without firing DELETE triggers when
+            # PRAGMA recursive_triggers is off (SQLite's default).
+            # Guard collisions at BEFORE INSERT, before REPLACE can erase a row.
+            # This protects against ordinary accidental REPLACE statements,
+            # not a privileged owner who can modify triggers or the database.
+            db.execute("""
+                CREATE TRIGGER IF NOT EXISTS revision_no_replace
+                BEFORE INSERT ON observation_revisions
+                WHEN EXISTS (
+                    SELECT 1 FROM observation_revisions
+                    WHERE sequence = NEW.sequence
+                )
+                BEGIN SELECT RAISE(ABORT, 'revision sequence already exists'); END
+            """)
 
     async def append(
         self, observation: Observation | None, *, observation_id: str | None = None
