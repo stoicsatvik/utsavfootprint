@@ -64,5 +64,11 @@ class SQLiteObservationStore:
         if not self.path.exists():
             return []
         with sqlite3.connect(self.path) as db:
-            rows = db.execute("SELECT payload FROM observations ORDER BY observed_at DESC").fetchall()
-        return [Observation.model_validate_json(row[0]) for row in rows]
+            rows = db.execute("SELECT payload FROM observations").fetchall()
+        # ISO timestamp strings with different UTC offsets do not sort by instant
+        # lexicographically. Validate first, then compare aware datetime values.
+        return sorted(
+            (Observation.model_validate_json(row[0]) for row in rows),
+            key=lambda observation: (observation.observed_at, observation.id),
+            reverse=True,
+        )
