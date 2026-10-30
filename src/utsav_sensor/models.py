@@ -72,8 +72,9 @@ class HotspotState(BaseModel):
     freshness: float = Field(ge=0, le=1)
     confidence: float = Field(ge=0, le=1)
     materials: dict[str, float]
-    mass_kg_low: float | None = None
-    mass_kg_high: float | None = None
+    # Reject non-finite/negative fused output even for callers bypassing Observation.
+    mass_kg_low: float | None = Field(default=None, ge=0, allow_inf_nan=False)
+    mass_kg_high: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     mass_basis: Provenance | None = None
     unresolved_hours: float = Field(ge=0, allow_inf_nan=False)
     unresolved_waste_hours_low: float | None = Field(default=None, ge=0, allow_inf_nan=False)
@@ -88,6 +89,12 @@ class HotspotState(BaseModel):
 
     @model_validator(mode="after")
     def valid_mass_hour_overflow_flags(self):
+        if (
+            self.mass_kg_low is not None
+            and self.mass_kg_high is not None
+            and self.mass_kg_low > self.mass_kg_high
+        ):
+            raise ValueError("mass_kg_low cannot exceed mass_kg_high")
         bounds = (
             (self.unresolved_waste_hours_low, self.unresolved_waste_hours_overflow_low),
             (self.unresolved_waste_hours_high, self.unresolved_waste_hours_overflow_high),
