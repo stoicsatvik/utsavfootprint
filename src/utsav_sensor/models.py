@@ -80,7 +80,27 @@ class HotspotState(BaseModel):
     unresolved_waste_hours_high: float | None = Field(default=None, ge=0, allow_inf_nan=False)
     # True means at least one derived mass-hour product overflowed, not missing evidence.
     unresolved_waste_hours_overflow: bool = False
+    # None denotes a legacy state without per-bound diagnostics. Explicit
+    # booleans let metrics distinguish an absent bound from arithmetic overflow.
+    unresolved_waste_hours_overflow_low: bool | None = None
+    unresolved_waste_hours_overflow_high: bool | None = None
     observation_ids: list[str]
+
+    @model_validator(mode="after")
+    def valid_mass_hour_overflow_flags(self):
+        bounds = (
+            (self.unresolved_waste_hours_low, self.unresolved_waste_hours_overflow_low),
+            (self.unresolved_waste_hours_high, self.unresolved_waste_hours_overflow_high),
+        )
+        if any(flag is True and value is not None for value, flag in bounds):
+            raise ValueError("an overflowed mass-hour bound must have a null value")
+        if any(flag is True for _, flag in bounds) and not self.unresolved_waste_hours_overflow:
+            raise ValueError("aggregate mass-hour overflow must include each flagged bound")
+        if all(flag is not None for _, flag in bounds) and (
+            self.unresolved_waste_hours_overflow != any(flag for _, flag in bounds)
+        ):
+            raise ValueError("aggregate mass-hour overflow disagrees with known bound flags")
+        return self
 
 
 class SourceHealth(BaseModel):
