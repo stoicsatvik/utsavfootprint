@@ -68,6 +68,8 @@ def test_invalid_log_fails_closed():
     cases = [
         [first, first],
         [first, ObservationRevision(2, hour(4), "site", None)],
+        [first, ObservationRevision(3, hour(7), "site", None)],
+        [ObservationRevision(2, hour(5), "site", observation("site", 4, 5))],
         [ObservationRevision(1, hour(5), "other", observation("site", 4, 5))],
         [ObservationRevision(0, hour(5), "site", observation("site", 4, 5))],
         [ObservationRevision(1, hour(5), "site", observation("site", 4, 6))],
