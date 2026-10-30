@@ -226,7 +226,7 @@ class SQLiteRevisionLedger:
     def _verified_revisions_sync(
         self, expected_head_sequence: int, expected_sha256: str
     ) -> list[ObservationRevision]:
-        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\\x00")
+        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\x00")
         head = 0
         with closing(sqlite3.connect(self.path)) as db:
             db.execute("BEGIN")  # Hash and deserialize one consistent snapshot.
