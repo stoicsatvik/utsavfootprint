@@ -203,6 +203,71 @@ class SQLiteRevisionLedger:
         ):
             raise ValueError("revision checkpoint mismatch")
 
+    async def verified_revisions(
+        self, expected_head_sequence: int, expected_sha256: str
+    ) -> list[ObservationRevision]:
+        """Return only receipts covered by one verified SQLite read snapshot.
+
+        Do not call verify_checkpoint() and then revisions(): those are two
+        separate reads, so an intervening append or rewrite can escape the
+        check. The expected digest must be retained outside SQLite.
+        """
+        if (
+            type(expected_head_sequence) is not int
+            or expected_head_sequence < 0
+            or not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise ValueError("invalid external revision checkpoint")
+        return await asyncio.to_thread(
+            self._verified_revisions_sync, expected_head_sequence, expected_sha256
+        )
+
+    def _verified_revisions_sync(
+        self, expected_head_sequence: int, expected_sha256: str
+    ) -> list[ObservationRevision]:
+        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\x00")
+        head = 0
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("BEGIN")  # Hash and deserialize one consistent snapshot.
+            rows = db.execute(
+                "SELECT sequence, recorded_at, observation_id, payload "
+                "FROM observation_revisions ORDER BY sequence"
+            ).fetchall()
+            for row in rows:
+                if type(row[0]) is not int or row[0] != head + 1:
+                    raise ValueError("revision sequence gap or missing prefix")
+                encoded = json.dumps(
+                    row, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
+                digest.update(len(encoded).to_bytes(8, "big"))
+                digest.update(encoded)
+                head += 1
+        if head != expected_head_sequence or not hmac.compare_digest(
+            digest.hexdigest(), expected_sha256
+        ):
+            raise ValueError("revision checkpoint mismatch")
+        revisions = [
+            ObservationRevision(
+                sequence,
+                datetime.fromisoformat(recorded_at),
+                observation_id,
+                None if payload is None else Observation.model_validate_json(payload),
+            )
+            for sequence, recorded_at, observation_id, payload in rows
+        ]
+        replay_observation_revisions(revisions, datetime.max.replace(tzinfo=UTC))
+        return revisions
+
+    async def verified_hotspots_as_of(
+        self, as_of: datetime, expected_head_sequence: int, expected_sha256: str
+    ) -> list[HotspotState]:
+        """Build a historical view only from receipts matching a trusted digest."""
+        revisions = await self.verified_revisions(
+            expected_head_sequence, expected_sha256
+        )
+        return build_hotspots_from_revisions_as_of(revisions, as_of)
+
     async def hotspots_as_of(
         self, as_of: datetime, *, expected_head_sequence: int | None = None
     ) -> list[HotspotState]:
