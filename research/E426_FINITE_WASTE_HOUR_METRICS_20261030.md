@@ -13,10 +13,11 @@ E424 rejects non-finite input mass. Does that ensure finite mass and mass-hour o
 - Compute each derived mass-hour metric; if multiplication overflows, return `null` **with** `unresolved_waste_hours_overflow=true`. A missing mass instead returns `null` with the flag **false**. If one bound overflows, the other finite bound is preserved.
 - Constrain derived output metrics and unresolved hours to finite nonnegative values at model validation. No arbitrary physical mass cap or saturation value is invented.
 - Preserve zero-duration closure: even enormous finite mass multiplied by zero produces zero, not overflow.
+- The existing `/metrics` consumer previously used `or 0`, so it silently undercounted flagged nulls. Prometheus now emits `NaN` for an affected aggregate and reports `utsav_unresolved_waste_hours_overflow_hotspots`. A sum of individually finite values that itself overflows is also emitted as `NaN`.
 
 ## Tests
 
-`tests/test_e426_finite_waste_hour_metrics.py` includes frozen-time regression tests for single-source overflow, two-source even median, zero-duration cleanup, ordinary finite metrics, missing mass, JSON serialization, and schema rejection of injected non-finite derived output.
+`tests/test_e426_finite_waste_hour_metrics.py` includes frozen-time regression tests for single-source overflow, two-source even median, zero-duration cleanup, ordinary finite metrics, missing mass, JSON serialization, schema rejection of injected non-finite derived output, and the Prometheus consumer's flagged-null and aggregate-overflow behavior.
 
 **Validation status at initial commit:** Standalone numeric reproduction passed. Exact repository pytest, Ruff, and CI have not yet been verified; do not equate a local numeric demonstration with integration success. The branch is stacked on E424 and remains draft/unmerged.
 
@@ -26,4 +27,4 @@ The overflow flag is a numerical diagnostic, not a physical plausibility judgmen
 
 ## Next experiment
 
-Test an explicit consumer of `HotspotState` (API JSON and any dashboard calculations) with a flagged-overflow fixture to verify that it does not display `null` as zero or rank the hotspot as low priority.
+Test dashboard and downstream monitoring alert rules with flagged-overflow fixtures, including mixed missing and overflowed mass bounds. The current aggregate policy conservatively emits `NaN` for a missing bound whenever the hotspot-level overflow flag is set; a future per-bound flag could avoid this loss of precision.
