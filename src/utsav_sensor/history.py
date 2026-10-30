@@ -35,6 +35,7 @@ def replay_observation_revisions(
     current: dict[str, Observation] = {}
     previous_recorded_at: datetime | None = None
     seen_sequences: set[int] = set()
+    expected_sequence = 1
 
     for revision in sorted(revisions, key=lambda r: r.sequence):
         if type(revision.sequence) is not int or revision.sequence <= 0:
@@ -42,6 +43,9 @@ def replay_observation_revisions(
         if revision.sequence in seen_sequences:
             raise ValueError("duplicate revision sequence")
         seen_sequences.add(revision.sequence)
+        if revision.sequence != expected_sequence:
+            raise ValueError("incomplete revision log: sequence gap or missing prefix")
+        expected_sequence += 1
         if not revision.observation_id:
             raise ValueError("empty revision observation_id")
         stamp = revision.recorded_at
