@@ -158,7 +158,7 @@ class SQLiteRevisionLedger:
     def _checkpoint_sync(self) -> tuple[int, str]:
         # Domain separation and length framing make this digest format
         # unambiguous; version the prefix if its serialization ever changes.
-        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\\x00")
+        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\x00")
         head = 0
         with closing(sqlite3.connect(self.path)) as db:
             db.execute("BEGIN")  # One consistent SQLite read snapshot.
