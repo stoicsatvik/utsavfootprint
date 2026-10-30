@@ -1,5 +1,6 @@
 """E426: finite inputs must never silently become infinite hotspot metrics."""
 
+import asyncio
 import json
 import math
 from datetime import UTC, datetime, timedelta
@@ -7,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from pydantic import ValidationError
 
+from utsav_sensor import api
 from utsav_sensor.fusion import build_hotspots
 from utsav_sensor.models import HotspotState, Observation
 
@@ -77,3 +79,47 @@ def test_output_schema_rejects_nonfinite_derived_metric() -> None:
         HotspotState.model_validate(
             {**hotspot.model_dump(), "unresolved_waste_hours_high": math.inf}
         )
+
+
+def test_prometheus_does_not_count_overflowed_metric_as_zero(monkeypatch) -> None:
+    overflow = build_hotspots([observation("huge", 10.0, 1e308)], now=NOW)[0]
+
+    async def hotspots():
+        return [overflow]
+
+    async def observations():
+        return []
+
+    monkeypatch.setattr(api.engine, "hotspots", hotspots)
+    monkeypatch.setattr(api.engine, "observations", observations)
+    output = asyncio.run(api.metrics())
+    assert "utsav_unresolved_waste_hours_low 20.0" in output
+    assert "utsav_unresolved_waste_hours_high NaN" in output
+    assert "utsav_unresolved_waste_hours_overflow_hotspots 1" in output
+
+
+def test_prometheus_flags_aggregate_overflow_of_individually_finite_metrics(
+    monkeypatch,
+) -> None:
+    ordinary = build_hotspots([observation("ordinary", 10.0, 20.0)], now=NOW)[0]
+    huge = HotspotState.model_validate(
+        {
+            **ordinary.model_dump(),
+            "unresolved_waste_hours_low": 1e308,
+            "unresolved_waste_hours_high": 1e308,
+            "unresolved_waste_hours_overflow": False,
+        }
+    )
+
+    async def hotspots():
+        return [huge, huge]
+
+    async def observations():
+        return []
+
+    monkeypatch.setattr(api.engine, "hotspots", hotspots)
+    monkeypatch.setattr(api.engine, "observations", observations)
+    output = asyncio.run(api.metrics())
+    assert "utsav_unresolved_waste_hours_low NaN" in output
+    assert "utsav_unresolved_waste_hours_high NaN" in output
+    assert "utsav_unresolved_waste_hours_overflow_hotspots 0" in output
