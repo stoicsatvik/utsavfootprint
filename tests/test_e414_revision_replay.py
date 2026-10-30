@@ -9,7 +9,6 @@ from utsav_sensor.history import (
 )
 from utsav_sensor.models import Observation
 
-
 BASE = datetime(2026, 10, 30, 0, 0, tzinfo=UTC)
 
 
