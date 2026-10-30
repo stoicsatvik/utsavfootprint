@@ -16,7 +16,7 @@ E426 correctly prevented finite mass inputs from producing unmarked infinite der
 
 ## Reproduction and validation
 
-The original aggregate-only behavior was reproduced in a local Python 3.11/Pydantic 2.13.5 source-equivalent mirror: missing low + overflowed high yielded low `NaN` instead of the existing skip-missing total. The proposed contract passed **9/9 isolated pytest checks** covering mixed bounds, legacy fallback, both-bound overflow, ordinary missing data, aggregate overflow, and inconsistent flags. These are not exact-repository integration tests.
+The original aggregate-only behavior was reproduced in a local Python 3.13.5/Pydantic 2.13.5 source-equivalent mirror: missing low + overflowed high yielded low `NaN` instead of the existing skip-missing total. The proposed contract passed **9/9 isolated pytest checks** covering mixed bounds, legacy fallback, both-bound overflow, ordinary missing data, aggregate overflow, and inconsistent flags. These are not exact-repository integration tests.
 
 New repository regressions are in `tests/test_e427_bound_overflow_precision.py`, covering fusion JSON, missing mass, mixed-bound Prometheus output, legacy fallback and invalid flags.
 
