@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
+import json
+import re
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -141,6 +145,59 @@ class SQLiteRevisionLedger:
         if expected_head_sequence is not None and len(revisions) != expected_head_sequence:
             raise ValueError("revision log does not match trusted head checkpoint")
         return revisions
+
+    async def checkpoint(self) -> tuple[int, str]:
+        """Compute a read-only SHA-256 receipt over the complete raw SQLite log.
+
+        The returned (head_sequence, digest) becomes useful evidence only if a
+        trusted party retains it OUTSIDE this database. It is not signed,
+        timestamped by an independent authority, or automatically exported.
+        """
+        return await asyncio.to_thread(self._checkpoint_sync)
+
+    def _checkpoint_sync(self) -> tuple[int, str]:
+        # Domain separation and length framing make this digest format
+        # unambiguous; version the prefix if its serialization ever changes.
+        digest = hashlib.sha256(b"utsav-revision-ledger-checkpoint-v1\x00")
+        head = 0
+        with closing(sqlite3.connect(self.path)) as db:
+            db.execute("BEGIN")  # One consistent SQLite read snapshot.
+            rows = db.execute(
+                "SELECT sequence, recorded_at, observation_id, payload "
+                "FROM observation_revisions ORDER BY sequence"
+            )
+            for row in rows:
+                if type(row[0]) is not int or row[0] != head + 1:
+                    raise ValueError("revision sequence gap or missing prefix")
+                encoded = json.dumps(
+                    row, ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
+                digest.update(len(encoded).to_bytes(8, "big"))
+                digest.update(encoded)
+                head += 1
+        return head, digest.hexdigest()
+
+    async def verify_checkpoint(
+        self, expected_head_sequence: int, expected_sha256: str
+    ) -> None:
+        """Fail closed if current ledger differs from an externally saved receipt.
+
+        A locally generated or database-co-located expected value is NOT a
+        trusted checkpoint; an attacker able to rewrite both can evade this.
+        """
+        if (
+            type(expected_head_sequence) is not int
+            or expected_head_sequence < 0
+            or not isinstance(expected_sha256, str)
+            or re.fullmatch(r"[0-9a-f]{64}", expected_sha256) is None
+        ):
+            raise ValueError("invalid external revision checkpoint")
+        actual_head, actual_sha256 = await self.checkpoint()
+        if (
+            actual_head != expected_head_sequence
+            or not hmac.compare_digest(actual_sha256, expected_sha256)
+        ):
+            raise ValueError("revision checkpoint mismatch")
 
     async def hotspots_as_of(
         self, as_of: datetime, *, expected_head_sequence: int | None = None
