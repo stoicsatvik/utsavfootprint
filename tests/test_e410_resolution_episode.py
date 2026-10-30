@@ -65,6 +65,18 @@ def test_equal_timestamp_open_prevents_ambiguous_closure():
     ], NOW)
     assert state.status == "open"
     assert state.unresolved_hours == 2
+    reversed_state = fuse_cluster([
+        report("scale-partner", 2, "verified", "measured"),
+        report("citizen", 2, "open"),
+    ], NOW)
+    assert reversed_state.status == state.status
+    assert reversed_state.unresolved_hours == state.unresolved_hours
+
+
+def test_unverified_closed_only_cannot_claim_confirmed_resolution():
+    state = fuse_cluster([report("anonymous", 3, "cleaned", "observed")], NOW)
+    assert state.status == "open"
+    assert state.unresolved_hours == 3
 
 
 def test_later_confirmed_verification_closes_reopened_episode():
