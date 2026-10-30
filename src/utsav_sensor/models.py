@@ -6,7 +6,7 @@ from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AwareDatetime, BaseModel, Field, field_validator, model_validator
 
 
 class Provenance(StrEnum):
@@ -32,8 +32,8 @@ class Observation(BaseModel):
     source_id: str = Field(min_length=1, max_length=200)
     lat: float = Field(ge=-90, le=90)
     lon: float = Field(ge=-180, le=180)
-    observed_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    ingested_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    observed_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
+    ingested_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     confidence: float = Field(default=0.5, ge=0, le=1)
     media_quality: float = Field(default=1.0, ge=0, le=1)
     materials: dict[str, float] = Field(default_factory=dict)
