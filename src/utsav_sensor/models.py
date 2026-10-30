@@ -34,6 +34,14 @@ class Observation(BaseModel):
     lon: float = Field(ge=-180, le=180)
     observed_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
     ingested_at: AwareDatetime = Field(default_factory=lambda: datetime.now(UTC))
+
+    @field_validator("observed_at", "ingested_at")
+    @classmethod
+    def canonicalize_utc(cls, value: datetime) -> datetime:
+        # AwareDatetime rejects ambiguous naive input before this validator.
+        # Canonical UTC matches the earlier E175 contract and keeps stored
+        # timestamps comparable even when producers use different offsets.
+        return value.astimezone(UTC)
     confidence: float = Field(default=0.5, ge=0, le=1)
     media_quality: float = Field(default=1.0, ge=0, le=1)
     materials: dict[str, float] = Field(default_factory=dict)
