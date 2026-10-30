@@ -32,3 +32,9 @@ SQLite `ORDER BY observed_at DESC` compares stored ISO-8601 TEXT lexicographical
 - **Actual repository pytest, Ruff, exact-head GitHub CI: NOT RUN.** Included Actions minutes were exhausted per the 2026-10-29 billing notice. Commits use `[skip ci]` to avoid potentially billable runs.
 - **2026-10-31 follow-up:** 5/5 source-equivalent Pydantic/SQLite local checks passed for UTC normalization, naive rejection, and legacy mixed-offset chronology. Exact repository tests/Ruff/CI remain **NOT RUN**.
 - No production database was accessed. Before merge, run the complete tests in verified no-charge capacity, audit an authorized offline snapshot with E176/E177, and review any existing offset-dependent clients. No automatic data migration or backfill was attempted.
+
+## Broader stack duplication found during 2026-10-31 review
+
+The timezone conflict is not isolated. The earlier unmerged [E177 PR #13](https://github.com/stoicsatvik/utsavfootprint/pull/13) already added non-finite material-probability rejection and legacy payload audit coverage; the later stacked [E423 PR #40](https://github.com/stoicsatvik/utsavfootprint/pull/40) addresses the same material-NaN input invariant. Likewise, earlier [E187 PR #14](https://github.com/stoicsatvik/utsavfootprint/pull/14) already added `allow_inf_nan=False` for input mass bounds, overlapping later [E424 PR #41](https://github.com/stoicsatvik/utsavfootprint/pull/41).
+
+These are **independent draft branches, not merged changes**. The older exact-head green CI results do not validate the later stack. Before integration, build a per-file/per-invariant comparison, select one implementation per contract, and retain whichever regression tests and audit safeguards provide nonredundant coverage. Do not cherry-pick both implementations blindly. This is an integration finding, not an additional code change or a claim that the full stacks are equivalent.
