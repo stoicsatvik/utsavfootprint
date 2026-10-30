@@ -3,7 +3,6 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from datetime import UTC, datetime
-from statistics import median
 
 from .models import HotspotState, Observation, Provenance
 
@@ -162,6 +161,28 @@ def _representatives_by_source(
     return list(selected.values())
 
 
+def _finite_nonnegative_median(values: list[float]) -> float:
+    """Compute an even-sample median without overflowing finite positive inputs."""
+    if not values or any(not math.isfinite(value) or value < 0 for value in values):
+        raise ValueError("mass samples must be finite and nonnegative")
+    ordered = sorted(values)
+    middle = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[middle]
+    lower, upper = ordered[middle - 1], ordered[middle]
+    return lower + (upper - lower) / 2
+
+
+def _finite_waste_hours(mass: float | None, hours: float) -> tuple[float | None, bool]:
+    """Return a finite metric or a flagged overflow, retaining original mass evidence."""
+    if mass is None:
+        return None, False
+    result = mass * hours
+    if not math.isfinite(result):
+        return None, True
+    return result, False
+
+
 def _fuse_mass(cluster: list[Observation], now: datetime):
     candidates = [o for o in cluster if o.mass_kg_low is not None and o.mass_kg_high is not None]
     if not candidates:
@@ -183,8 +204,8 @@ def _fuse_mass(cluster: list[Observation], now: datetime):
         s = max(observation_strength(o, now), 0.01)
         weighted.append((o.mass_kg_low, o.mass_kg_high, s, o.provenance))
 
-    low = float(median([x[0] for x in weighted]))
-    high = float(median([x[1] for x in weighted]))
+    low = _finite_nonnegative_median([x[0] for x in weighted])
+    high = _finite_nonnegative_median([x[1] for x in weighted])
     basis = max((x[3] for x in weighted), key=lambda p: PROVENANCE_WEIGHT[p])
     return low, high, basis
 
@@ -274,6 +295,8 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
 
     low, high, basis = _fuse_mass(cluster, now)
     effective_status, unresolved_hours = _resolution_episode(cluster, now)
+    waste_low, overflow_low = _finite_waste_hours(low, unresolved_hours)
+    waste_high, overflow_high = _finite_waste_hours(high, unresolved_hours)
     hotspot_id = "hs_" + min(o.id for o in cluster).replace("-", "")[:16]
     return HotspotState(
         id=hotspot_id,
@@ -290,8 +313,9 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         mass_kg_high=high,
         mass_basis=basis,
         unresolved_hours=unresolved_hours,
-        unresolved_waste_hours_low=None if low is None else low * unresolved_hours,
-        unresolved_waste_hours_high=None if high is None else high * unresolved_hours,
+        unresolved_waste_hours_low=waste_low,
+        unresolved_waste_hours_high=waste_high,
+        unresolved_waste_hours_overflow=overflow_low or overflow_high,
         observation_ids=[o.id for o in cluster],
     )
 

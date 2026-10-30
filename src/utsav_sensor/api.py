@@ -161,8 +161,24 @@ async def nasa_search(request: SatelliteSearchRequest):
 async def metrics():
     obs = await engine.observations()
     hs = await engine.hotspots()
-    low = sum(h.unresolved_waste_hours_low or 0 for h in hs)
-    high = sum(h.unresolved_waste_hours_high or 0 for h in hs)
+    # A flagged null is overflow, not zero. Expose an explicit NaN in the
+    # aggregate rather than silently undercounting a hotspot's mass-hours.
+    def mass_hour_total(field: str) -> str:
+        total = 0.0
+        for state in hs:
+            value = getattr(state, field)
+            if value is None:
+                if state.unresolved_waste_hours_overflow:
+                    return "NaN"
+                continue
+            total += value
+            if total == float("inf"):
+                return "NaN"
+        return str(total)
+
+    low = mass_hour_total("unresolved_waste_hours_low")
+    high = mass_hour_total("unresolved_waste_hours_high")
+    overflow_count = sum(h.unresolved_waste_hours_overflow for h in hs)
     lines = [
         "# TYPE utsav_observations_total gauge",
         f"utsav_observations_total {len(obs)}",
@@ -172,6 +188,8 @@ async def metrics():
         f"utsav_unresolved_waste_hours_low {low}",
         "# TYPE utsav_unresolved_waste_hours_high gauge",
         f"utsav_unresolved_waste_hours_high {high}",
+        "# TYPE utsav_unresolved_waste_hours_overflow_hotspots gauge",
+        f"utsav_unresolved_waste_hours_overflow_hotspots {overflow_count}",
     ]
     return "\n".join(lines) + "\n"
 
