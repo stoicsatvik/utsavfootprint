@@ -316,6 +316,8 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         unresolved_waste_hours_low=waste_low,
         unresolved_waste_hours_high=waste_high,
         unresolved_waste_hours_overflow=overflow_low or overflow_high,
+        unresolved_waste_hours_overflow_low=overflow_low,
+        unresolved_waste_hours_overflow_high=overflow_high,
         observation_ids=[o.id for o in cluster],
     )
 
