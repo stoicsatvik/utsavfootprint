@@ -22,7 +22,9 @@ def haversine_m(a_lat: float, a_lon: float, b_lat: float, b_lon: float) -> float
     dp = math.radians(b_lat - a_lat)
     dl = math.radians(b_lon - a_lon)
     q = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
-    return 2 * r * math.asin(math.sqrt(q))
+    # Valid spherical geometry has 0 <= q <= 1, but binary64 summation can
+    # overshoot 1 by a few ULPs for near-antipodal coordinates.
+    return 2 * r * math.asin(math.sqrt(min(1.0, max(0.0, q))))
 
 
 def freshness(observed_at: datetime, now: datetime, half_life_hours: float = 4.0) -> float:
