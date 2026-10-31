@@ -295,8 +295,26 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         if material_den[k] > 0
     }
 
-    low, high, basis = _fuse_mass(cluster, now)
     effective_status, unresolved_hours = _resolution_episode(cluster, now)
+    # A declared credible cleanup ends the previous mass episode. When a later
+    # open report reopens this hotspot, a pre-cleanup measured mass must not
+    # override lower-provenance *current* mass evidence. Equal-time closure and
+    # reopening are ambiguous: abstain from attributing closure-time mass to
+    # the new episode. Preserve historical mass on a closed hotspot.
+    terminal = {"cleaned", "verified"}
+    credible = {Provenance.MEASURED, Provenance.VERIFIED_OFFICIAL}
+    last_closure = max(
+        (o.observed_at for o in cluster if o.status in terminal and o.provenance in credible),
+        default=None,
+    )
+    reopened = last_closure is not None and any(
+        o.status not in terminal and o.observed_at >= last_closure for o in cluster
+    )
+    mass_episode = (
+        [o for o in cluster if o.observed_at > last_closure]
+        if reopened else cluster
+    )
+    low, high, basis = _fuse_mass(mass_episode, now)
     waste_low, overflow_low = _finite_waste_hours(low, unresolved_hours)
     waste_high, overflow_high = _finite_waste_hours(high, unresolved_hours)
     hotspot_id = "hs_" + min(o.id for o in cluster).replace("-", "")[:16]

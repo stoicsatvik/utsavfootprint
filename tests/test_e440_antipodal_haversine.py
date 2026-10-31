@@ -2,13 +2,13 @@
 
 No real field data, waste detection, or geospatial accuracy claim.
 """
-from datetime import UTC, datetime
 import math
 import random
+from datetime import UTC, datetime
 
 import pytest
 
-from utsav_sensor.fusion import haversine_m, cluster_observations
+from utsav_sensor.fusion import cluster_observations, haversine_m
 from utsav_sensor.models import Observation
 
 R = 6_371_000.0
