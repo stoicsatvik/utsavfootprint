@@ -283,18 +283,6 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     last_seen = max(o.observed_at for o in cluster)
     fresh = freshness(last_seen, now)
 
-    material_num: dict[str, float] = defaultdict(float)
-    material_den: dict[str, float] = defaultdict(float)
-    for o, s in zip(representatives, representative_strengths, strict=True):
-        for k, p in o.materials.items():
-            material_num[k] += p * s
-            material_den[k] += s
-    materials = {
-        k: round(material_num[k] / material_den[k], 4)
-        for k in material_num
-        if material_den[k] > 0
-    }
-
     effective_status, unresolved_hours = _resolution_episode(cluster, now)
     # A declared credible cleanup ends the previous mass episode. When a later
     # open report reopens this hotspot, a pre-cleanup measured mass must not
@@ -314,6 +302,30 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         [o for o in cluster if o.observed_at > last_closure]
         if reopened else cluster
     )
+    # A reopened hotspot is a new waste episode: pre-cleanup material
+    # classifications must not describe the current pile. Select sources
+    # *after* the epoch boundary so an older stronger report from the same
+    # source cannot suppress a new post-cleanup material observation.
+    # Within a reopened episode, a later status-only report from the same
+    # source must not erase its earlier material classification. Empty
+    # materials mean no material evidence, not a claim that material vanished.
+    # Keep non-reopened source-selection semantics unchanged.
+    material_evidence = (
+        [o for o in mass_episode if o.materials] if reopened else mass_episode
+    )
+    material_representatives = _representatives_by_source(material_evidence, now)
+    material_num: dict[str, float] = defaultdict(float)
+    material_den: dict[str, float] = defaultdict(float)
+    for o in material_representatives:
+        s = observation_strength(o, now)
+        for k, p in o.materials.items():
+            material_num[k] += p * s
+            material_den[k] += s
+    materials = {
+        k: round(material_num[k] / material_den[k], 4)
+        for k in material_num
+        if material_den[k] > 0
+    }
     low, high, basis = _fuse_mass(mass_episode, now)
     waste_low, overflow_low = _finite_waste_hours(low, unresolved_hours)
     waste_high, overflow_high = _finite_waste_hours(high, unresolved_hours)
