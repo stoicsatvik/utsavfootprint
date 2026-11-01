@@ -259,7 +259,6 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     if any((o.observed_at - now).total_seconds() > FUTURE_CLOCK_SKEW_SECONDS for o in cluster):
         raise ValueError("future-dated observation exceeds clock-skew tolerance")
 
-    strengths = [observation_strength(o, now) for o in cluster]
     representatives = _representatives_by_source(cluster, now)
     representative_strengths = [observation_strength(o, now) for o in representatives]
     # A zero-confidence observation still has a location; zero evidence must not
@@ -271,14 +270,6 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         else [1.0] * len(representatives)
     )
     lat, lon = _spherical_centroid(representatives, position_weights)
-
-    strongest_by_source: dict[str, float] = {}
-    for o, s in zip(cluster, strengths, strict=True):
-        strongest_by_source[o.source_id] = max(strongest_by_source.get(o.source_id, 0.0), s)
-    combined_confidence = 1.0
-    for s in strongest_by_source.values():
-        combined_confidence *= 1.0 - min(s, 0.995)
-    combined_confidence = 1.0 - combined_confidence
 
     last_seen = max(o.observed_at for o in cluster)
     fresh = freshness(last_seen, now)
@@ -302,6 +293,22 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         [o for o in cluster if o.observed_at > last_closure]
         if reopened else cluster
     )
+    # Confidence describes evidence for the current unresolved waste episode,
+    # not the previous pile. Keep source/observation counts historical for audit.
+    # The same-time closure boundary is ambiguous and supplies no new-episode
+    # confidence, just as it supplies no new-episode mass or material evidence.
+    confidence_evidence = mass_episode if reopened else cluster
+    strongest_by_source: dict[str, float] = {}
+    for o in confidence_evidence:
+        strength = observation_strength(o, now)
+        strongest_by_source[o.source_id] = max(
+            strongest_by_source.get(o.source_id, 0.0), strength
+        )
+    combined_confidence = 1.0
+    for strength in strongest_by_source.values():
+        combined_confidence *= 1.0 - min(strength, 0.995)
+    combined_confidence = 1.0 - combined_confidence
+
     # A reopened hotspot is a new waste episode: pre-cleanup material
     # classifications must not describe the current pile. Select sources
     # *after* the epoch boundary so an older stronger report from the same
@@ -336,7 +343,7 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
         lon=lon,
         status=effective_status,
         observation_count=len(cluster),
-        independent_sources=len(strongest_by_source),
+        independent_sources=len({o.source_id for o in cluster}),
         last_observed_at=last_seen,
         freshness=fresh,
         confidence=combined_confidence,
