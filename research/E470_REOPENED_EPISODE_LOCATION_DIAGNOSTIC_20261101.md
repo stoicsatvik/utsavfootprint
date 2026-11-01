@@ -26,7 +26,9 @@ The exact new helper and test files were executed in an isolated Python 3.13.5/P
 The two GitHub file blob SHAs matched the locally tested bytes exactly:
 
 - `src/utsav_sensor/episode_location.py`: `6406de780297017d78c993418e88cf141c715450`
-- `tests/test_e470_reopened_episode_location.py`: `931ab001d28845c57539d1d456a39909abe3419c`
+- `tests/test_e470_reopened_episode_location.py`: `f62ba00ac21290918c9a977326b1cf7059ed56a6`
+
+The initial dateline and multiple-cleanup test coordinates exceeded the production 120 m all-pairs clustering bound. They were corrected to stay within that bound, and all 12 checks were rerun successfully. This fixture correction is preserved rather than treating an impossible precluster as representative.
 
 **Limitations:** This is not native execution against the exact existing repository `fusion.py` or full `models.py`; their behavior was source-equivalent in the isolated test workspace. Full inherited pytest, Ruff, installed-package integration and exact-head CI remain unverified. No potentially billable GitHub Actions workflow was deliberately started; commits use `[skip ci]`.
 
