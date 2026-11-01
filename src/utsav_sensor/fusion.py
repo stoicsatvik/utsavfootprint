@@ -306,7 +306,14 @@ def fuse_cluster(cluster: list[Observation], now: datetime | None = None) -> Hot
     # classifications must not describe the current pile. Select sources
     # *after* the epoch boundary so an older stronger report from the same
     # source cannot suppress a new post-cleanup material observation.
-    material_representatives = _representatives_by_source(mass_episode, now)
+    # Within a reopened episode, a later status-only report from the same
+    # source must not erase its earlier material classification. Empty
+    # materials mean no material evidence, not a claim that material vanished.
+    # Keep non-reopened source-selection semantics unchanged.
+    material_evidence = (
+        [o for o in mass_episode if o.materials] if reopened else mass_episode
+    )
+    material_representatives = _representatives_by_source(material_evidence, now)
     material_num: dict[str, float] = defaultdict(float)
     material_den: dict[str, float] = defaultdict(float)
     for o in material_representatives:
