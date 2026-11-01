@@ -72,7 +72,7 @@ def test_newest_credible_cleanup_resets_again():
     first = report("interim", NEW, lon=72.8786)
     second_cleanup = report("second", NOW - timedelta(minutes=45),
                             provenance="measured", status="verified")
-    latest = report("latest", NOW - timedelta(minutes=15), lon=72.879)
+    latest = report("latest", NOW - timedelta(minutes=15), lon=72.8787)
     actual = reopened_episode_location([report("old", OLD), closed(), first,
                                         second_cleanup, latest], NOW)
     assert actual is not None
@@ -91,8 +91,8 @@ def test_empty_cluster_rejected():
 
 
 def test_dateline_current_episode_stays_near_seam():
-    old = report("old", OLD, lat=0, lon=179.999, provenance="measured")
-    cleanup = report("cleanup", CLOSED, lat=0, lon=179.999,
+    old = report("old", OLD, lat=0, lon=179.9997, provenance="measured")
+    cleanup = report("cleanup", CLOSED, lat=0, lon=179.9997,
                      provenance="verified_official", status="cleaned")
     a = report("a", NEW, lat=0, lon=179.9998)
     b = report("b", NEW, lat=0, lon=-179.9998)
