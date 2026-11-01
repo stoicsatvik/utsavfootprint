@@ -103,3 +103,23 @@ def test_latest_credible_cleanup_defines_material_epoch():
         NOW,
     )
     assert h.materials == {"paper": 0.75}
+
+
+def test_reopened_later_materialless_report_same_source_does_not_erase_glass():
+    # Missing material fields are abstention, not a negative classification.
+    glass = report("glass", NEW, source_id="reused", materials={"glass": 1.0})
+    later = report(
+        "status-only", NOW - timedelta(minutes=20), source_id="reused"
+    )
+    h = fuse_cluster([old_plastic(), cleanup(), glass, later], NOW)
+    assert h.materials == {"glass": 1.0}
+
+
+def test_reopened_later_material_report_same_source_can_replace_glass():
+    glass = report("glass", NEW, source_id="reused", materials={"glass": 1.0})
+    later = report(
+        "paper", NOW - timedelta(minutes=20),
+        source_id="reused", materials={"paper": 0.5},
+    )
+    h = fuse_cluster([old_plastic(), cleanup(), glass, later], NOW)
+    assert h.materials == {"paper": 0.5}
