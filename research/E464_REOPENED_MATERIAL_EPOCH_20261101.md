@@ -27,3 +27,14 @@ Committed tests: `tests/test_e464_reopened_material_epoch.py` (7 deterministic c
 ## Next falsification gate
 
 Run `python -m pytest -q tests/test_e464_reopened_material_epoch.py tests/test_reopened_mass_epoch.py` and inherited suite in a no-cost environment. Then separately specify whether current-episode confidence and centroid should exclude pre-cleanup evidence; test out-of-order ingestion, cluster split/merge, and independently authenticated closure labels. Do not merge, deploy or treat a synthetic classification as a field measurement.
+
+
+## E464 follow-up: same-source material abstention
+
+A second source-equivalent falsification found that a later *materialless* report from the same source can suppress its earlier current-episode material report. With a credible closure, post-closure glass=1.0 from source A, and a fresher status-only report from source A, the E464 initial code selected the fresher empty report and emitted `materials={}`. This is a false absence of evidence, not evidence that glass disappeared.
+
+**Narrow repair:** for reopened episodes only, filter out reports with empty `materials` before selecting the strongest report per source. This retains the latest strongest material-bearing evidence in the current episode. It does not restore any pre-cleanup material and does not alter non-reopened selection behavior. A newer material-bearing report can still supersede an older one.
+
+Two committed pytest contracts cover the materialless same-source report and the newer material-bearing replacement. A separately executed, source-equivalent five-case reproducer passed 5/5: materialless retention, order invariance, all-materialless abstention, unchanged non-reopened selection, and newer material-bearing replacement. The original source-equivalent code returned an empty material map for the retention case. These are synthetic algorithm checks, **not** execution of the committed tests or full repository CI.
+
+The committed E464 test file now contains **9** deterministic tests, unexecuted. The full inherited suite and exact-head CI remain unverified. Ingestion ordering, source identity authenticity, historical centroid/confidence and physical field accuracy remain unresolved.
