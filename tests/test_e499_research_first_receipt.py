@@ -1,8 +1,6 @@
 """E499: research-only first-receipt semantics and their remaining limits."""
 
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
-from multiprocessing import get_context
 
 import pytest
 
@@ -59,6 +57,8 @@ def test_conflicting_evidence_rejected_without_overwrite(tmp_path):
 
 
 def test_independent_connections_concurrent_identical_retries(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
     path = tmp_path / "r.db"
     a = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
     b = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED + timedelta(seconds=2))
@@ -70,6 +70,8 @@ def test_independent_connections_concurrent_identical_retries(tmp_path):
 
 
 def test_independent_connections_concurrent_conflict_one_winner(tmp_path):
+    from concurrent.futures import ThreadPoolExecutor
+
     path = tmp_path / "r.db"
     a = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
     b = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
@@ -136,6 +138,9 @@ def _process_put(path, source_id, receipt):
 
 
 def test_cross_process_same_id_conflict_has_single_winner(tmp_path):
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
+
     path = tmp_path / "r.db"
     # Initialize schema before starting the competing processes.
     ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
@@ -150,6 +155,9 @@ def test_cross_process_same_id_conflict_has_single_winner(tmp_path):
 
 
 def test_cross_process_identical_retry_preserves_original_receipt(tmp_path):
+    from concurrent.futures import ProcessPoolExecutor
+    from multiprocessing import get_context
+
     path = tmp_path / "r.db"
     ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
     with ProcessPoolExecutor(max_workers=2, mp_context=get_context("spawn")) as pool:
