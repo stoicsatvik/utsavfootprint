@@ -183,8 +183,9 @@ def _abrupt_receipt_writer(path, commit):
     db = sqlite3.connect(path, timeout=10, isolation_level=None)
     db.execute("BEGIN IMMEDIATE")
     db.execute(
-        "INSERT INTO research_first_receipts(id, evidence, payload) VALUES (?, ?, ?)",
-        (item.id, _evidence_key(item), stamped.model_dump_json()),
+        "INSERT INTO research_first_receipts(id, evidence, payload, receipt_at) "
+        "VALUES (?, ?, ?, ?)",
+        (item.id, _evidence_key(item), stamped.model_dump_json(), RECEIVED.isoformat()),
     )
     if commit:
         db.execute("COMMIT")
