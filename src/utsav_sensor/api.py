@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field, model_validator
 from .adapters.nasa import search_nasa_scenes
 from .engine import SensorEngine
 from .errors import ObservationConflictError
-from .models import Observation
+from .models import Observation, Provenance, SourceType
 from .place_query import geocode_place, summarize_coordinates
 from .store import SQLiteObservationStore
 
@@ -76,6 +76,18 @@ async def healthz():
 
 @app.post("/v1/observations", response_model=Observation)
 async def ingest(observation: Observation):
+    # No authentication exists on this route. Do not let an anonymous caller
+    # assert official/partner identity, measured provenance, or verified cleanup.
+    # This is a narrow trust boundary, not identity verification or Sybil defence.
+    if (
+        observation.source_type != SourceType.CITIZEN
+        or observation.provenance != Provenance.OBSERVED
+        or observation.status not in ("open", "candidate")
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="anonymous observations may only be citizen/observed/open-or-candidate",
+        )
     try:
         return await engine.ingest(observation)
     except ObservationConflictError as exc:
