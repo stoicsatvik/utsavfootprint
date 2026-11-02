@@ -4,6 +4,7 @@ import asyncio
 import sqlite3
 from pathlib import Path
 
+from .errors import ObservationConflictError
 from .models import Observation
 
 
@@ -39,23 +40,31 @@ class SQLiteObservationStore:
         await asyncio.to_thread(self._upsert_sync, observation)
 
     def _upsert_sync(self, observation: Observation) -> None:
+        # IDs are immutable evidence identities. An identical retry is safe,
+        # but a conflicting payload must never silently rewrite history.
+        payload = observation.model_dump_json()
         with sqlite3.connect(self.path) as db:
-            db.execute(
+            inserted = db.execute(
                 """
                 INSERT INTO observations(id, observed_at, ingested_at, payload)
                 VALUES (?, ?, ?, ?)
-                ON CONFLICT(id) DO UPDATE SET
-                    observed_at=excluded.observed_at,
-                    ingested_at=excluded.ingested_at,
-                    payload=excluded.payload
+                ON CONFLICT(id) DO NOTHING
                 """,
                 (
                     observation.id,
                     observation.observed_at.isoformat(),
                     observation.ingested_at.isoformat(),
-                    observation.model_dump_json(),
+                    payload,
                 ),
             )
+            if inserted.rowcount == 0:
+                row = db.execute(
+                    "SELECT payload FROM observations WHERE id = ?", (observation.id,)
+                ).fetchone()
+                if row is None or Observation.model_validate_json(row[0]) != observation:
+                    raise ObservationConflictError(
+                        "observation ID already exists with different evidence"
+                    )
 
     async def all(self) -> list[Observation]:
         return await asyncio.to_thread(self._all_sync)
