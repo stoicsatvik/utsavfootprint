@@ -29,3 +29,7 @@ This is stronger than E500's hand-constructed SQL transaction, but it is still *
 ## Next decision gate
 
 Run exact-head Ruff and the full pytest suite. Keep PR #54 draft. Before production integration, define a versioned receipt contract and test storage durability under actual restart/failure conditions with a trusted clock and authenticated issuers.
+
+## Exact-head repository validation
+
+At commit `c787b010bba3828226ffbaff8c10a7bf07d80adf`, both [PR CI #41434125090](https://github.com/stoicsatvik/utsavfootprint/actions/runs/41434125090) and [push CI #41434116660](https://github.com/stoicsatvik/utsavfootprint/actions/runs/41434116660) succeeded. The PR job log reports **Ruff: all checks passed; pytest: 199 passed, 1 nonfatal warning in 3.05s** (197 inherited plus 2 new). This verifies the real repository's model and dependencies on GitHub Actions; it does not remove the power-loss, issuer, or distributed-consistency limitations above. This documentation-only update requires a new final-head CI result.
