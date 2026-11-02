@@ -8,7 +8,6 @@ from utsav_sensor.errors import ObservationConflictError
 from utsav_sensor.models import Observation
 from utsav_sensor.research_receipt import ResearchFirstReceiptStore
 
-
 PAST = datetime(2020, 1, 1, tzinfo=UTC)
 RECEIVED = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 
