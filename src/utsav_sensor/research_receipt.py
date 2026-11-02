@@ -81,7 +81,16 @@ class ResearchFirstReceiptStore:
                 db.execute("COMMIT")
                 return result
             except BaseException:
-                db.execute("ROLLBACK")
+                # SQLITE_FULL can auto-rollback a transaction. A second SQL
+                # ROLLBACK would then mask the original storage failure with
+                # "cannot rollback - no transaction is active".
+                if db.in_transaction:
+                    try:
+                        db.rollback()
+                    except sqlite3.Error:
+                        # Closing the connection is the final cleanup boundary;
+                        # preserve the triggering error for diagnosis.
+                        pass
                 raise
 
     def get(self, observation_id: str) -> Observation | None:
