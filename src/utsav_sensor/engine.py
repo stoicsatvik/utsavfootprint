@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Protocol
 
+from .errors import ObservationConflictError
 from .fusion import build_hotspots
 from .models import HotspotState, Observation, SourceHealth
 
@@ -32,9 +33,18 @@ class SensorEngine:
             self._observations = {o.id: o for o in stored}
 
     async def ingest(self, observation: Observation) -> Observation:
-        if self._store is not None:
-            await self._store.upsert(observation)
+        # Serialize the identity check with the write, including no-store mode.
+        # Duplicate exact retries do not re-publish or inflate evidence.
         async with self._lock:
+            existing = self._observations.get(observation.id)
+            if existing is not None:
+                if existing != observation:
+                    raise ObservationConflictError(
+                        "observation ID already exists with different evidence"
+                    )
+                return existing
+            if self._store is not None:
+                await self._store.upsert(observation)
             self._observations[observation.id] = observation
         states = await self.hotspots()
         for callback in list(self._listeners):
