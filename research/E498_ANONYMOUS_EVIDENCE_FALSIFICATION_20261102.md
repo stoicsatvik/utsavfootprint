@@ -32,4 +32,4 @@ Design and test a server-issued first-ingestion timestamp with exact-ID idempote
 
 ## Validation
 
-Run `ruff check src tests scripts`, `pytest -q tests/test_e498_anonymous_evidence_falsification.py`, and `pytest -q` at the exact branch head. Record failures and CI separately; no results are asserted before execution.
+GitHub Actions [run #41411455454](https://github.com/stoicsatvik/utsavfootprint/actions/runs/41411455454) passed on code head `42b3fc07bcefd121ae5c4b7797d3d44113eed038` (2026-11-02). `ruff check src tests scripts`: all checks passed. Full `pytest -q`: **184 passed, 1 warning in 1.36s**, including both E498 synthetic end-to-end tests and 182 inherited tests. The warning is a Starlette/httpx deprecation; pytest-asyncio also emitted a configuration deprecation notice. These tests prove that the current trust failures are reproducible; they do **not** establish authentic reporters or a corrected API. This report-only follow-up commit requires a separate final-head CI check.
