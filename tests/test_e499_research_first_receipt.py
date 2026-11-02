@@ -169,3 +169,57 @@ def test_cross_process_identical_retry_preserves_original_receipt(tmp_path):
         RECEIVED,
         RECEIVED + timedelta(days=1),
     }
+
+
+def _abrupt_receipt_writer(path, commit):
+    """Child exits without Python cleanup immediately before/after COMMIT."""
+    import os
+    import sqlite3
+
+    from utsav_sensor.research_receipt import _evidence_key
+
+    item = report()
+    stamped = item.model_copy(update={"ingested_at": RECEIVED})
+    db = sqlite3.connect(path, timeout=10, isolation_level=None)
+    db.execute("BEGIN IMMEDIATE")
+    db.execute(
+        "INSERT INTO research_first_receipts(id, evidence, payload) VALUES (?, ?, ?)",
+        (item.id, _evidence_key(item), stamped.model_dump_json()),
+    )
+    if commit:
+        db.execute("COMMIT")
+    # No context manager or close: this deliberately simulates abrupt process death.
+    os._exit(17)
+
+
+def _run_abrupt_writer(path, *, commit):
+    from multiprocessing import get_context
+
+    child = get_context("spawn").Process(
+        target=_abrupt_receipt_writer, args=(str(path), commit)
+    )
+    child.start()
+    child.join(timeout=20)
+    if child.is_alive():
+        child.terminate()
+        child.join(timeout=5)
+        pytest.fail("abrupt-writer child timed out")
+    assert child.exitcode == 17
+
+
+def test_process_death_before_commit_discards_partial_receipt(tmp_path):
+    """SQLite rollback on process death; not a power-loss durability guarantee."""
+    path = tmp_path / "r.db"
+    store = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
+    _run_abrupt_writer(path, commit=False)
+    assert store.get("e499-report") is None
+    assert store.put(report()).ingested_at == RECEIVED
+
+
+def test_process_death_after_commit_preserves_first_receipt(tmp_path):
+    """Committed row survives writer exit; a retry cannot replace its stamp."""
+    path = tmp_path / "r.db"
+    store = ResearchFirstReceiptStore(path, clock=lambda: RECEIVED + timedelta(days=1))
+    _run_abrupt_writer(path, commit=True)
+    assert store.get("e499-report").ingested_at == RECEIVED
+    assert store.put(report(ingested_at=PAST + timedelta(days=2))).ingested_at == RECEIVED
