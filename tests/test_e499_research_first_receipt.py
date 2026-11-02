@@ -1,7 +1,8 @@
 """E499: research-only first-receipt semantics and their remaining limits."""
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta, timezone
+from multiprocessing import get_context
 
 import pytest
 
@@ -15,17 +16,17 @@ RECEIVED = datetime(2026, 11, 2, 9, 0, tzinfo=UTC)
 
 
 def report(id="e499-report", **changes):
-    data = dict(
-        id=id,
-        source_type="citizen",
-        provenance="observed",
-        source_id="unverified-citizen",
-        lat=19.076,
-        lon=72.8777,
-        observed_at=PAST,
-        ingested_at=PAST,
-        status="open",
-    )
+    data = {
+        "id": id,
+        "source_type": "citizen",
+        "provenance": "observed",
+        "source_id": "unverified-citizen",
+        "lat": 19.076,
+        "lon": 72.8777,
+        "observed_at": PAST,
+        "ingested_at": PAST,
+        "status": "open",
+    }
     data.update(changes)
     return Observation(**data)
 
@@ -135,9 +136,6 @@ def _process_put(path, source_id, receipt):
 
 
 def test_cross_process_same_id_conflict_has_single_winner(tmp_path):
-    from concurrent.futures import ProcessPoolExecutor
-    from multiprocessing import get_context
-
     path = tmp_path / "r.db"
     # Initialize schema before starting the competing processes.
     ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
@@ -152,9 +150,6 @@ def test_cross_process_same_id_conflict_has_single_winner(tmp_path):
 
 
 def test_cross_process_identical_retry_preserves_original_receipt(tmp_path):
-    from concurrent.futures import ProcessPoolExecutor
-    from multiprocessing import get_context
-
     path = tmp_path / "r.db"
     ResearchFirstReceiptStore(path, clock=lambda: RECEIVED)
     with ProcessPoolExecutor(max_workers=2, mp_context=get_context("spawn")) as pool:
