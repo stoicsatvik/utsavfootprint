@@ -32,3 +32,9 @@ E496's earlier GitHub Actions run #41400597365 failed during test collection wit
 ## Next decisive gate
 
 Introduce a separately authenticated partner/official ingest path with auditable issuer identity, server-issued ingestion timestamps, bounded source confidence, and an explicit migration contract for clients that used the former permissive POST. Test cross-ID Sybil inflation and replay under realistic untrusted reporters before any deployment. No outreach, data collection, or production migration is authorized by this experiment.
+
+## Executed CI validation
+
+The exact code head `ea3a8d1fc9c8d54270e3e6b250ea8aaac314873c` passed [GitHub Actions run #41404144607](https://github.com/stoicsatvik/utsavfootprint/actions/runs/41404144607) on 2026-11-02: `ruff check src tests scripts` succeeded and the full `pytest -q` suite reported **182 passed, 1 warning**. The warning concerns unset `pytest-asyncio` fixture loop scope, not a test failure. This validation covers the E497 guard and all inherited E496 tests. It does not imply authentication or field-data validity.
+
+This report update is documentation-only; verify the resulting final head separately before merge.
