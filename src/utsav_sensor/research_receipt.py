@@ -29,6 +29,24 @@ def _evidence_key(observation: Observation) -> str:
     )
 
 
+class ResearchReceiptIntegrityError(ValueError):
+    """Stored receipt and canonical evidence disagree; do not trust either."""
+
+
+def _verified_receipt(row: tuple[str, str], expected_id: str) -> Observation:
+    """Fail closed on inconsistent SQLite row fields (not a MAC or signature)."""
+    stored_evidence, payload = row
+    try:
+        item = Observation.model_validate_json(payload)
+        if item.id != expected_id or _evidence_key(item) != stored_evidence:
+            raise ResearchReceiptIntegrityError("stored receipt/evidence mismatch")
+    except (ValueError, TypeError) as exc:
+        if isinstance(exc, ResearchReceiptIntegrityError):
+            raise
+        raise ResearchReceiptIntegrityError("invalid stored receipt payload") from exc
+    return item
+
+
 class ResearchFirstReceiptStore:
     """Standalone experimental store, intentionally unused by production code."""
 
@@ -61,11 +79,11 @@ class ResearchFirstReceiptStore:
                     (observation.id,),
                 ).fetchone()
                 if row is not None:
+                    result = _verified_receipt(row, observation.id)
                     if row[0] != evidence:
                         raise ObservationConflictError(
                             "observation ID already exists with different evidence"
                         )
-                    result = Observation.model_validate_json(row[1])
                 else:
                     receipt = self.clock()
                     if receipt.tzinfo is None or receipt.utcoffset() is None:
@@ -96,7 +114,7 @@ class ResearchFirstReceiptStore:
     def get(self, observation_id: str) -> Observation | None:
         with closing(sqlite3.connect(self.path, timeout=10)) as db:
             row = db.execute(
-                "SELECT payload FROM research_first_receipts WHERE id = ?",
+                "SELECT evidence, payload FROM research_first_receipts WHERE id = ?",
                 (observation_id,),
             ).fetchone()
-        return Observation.model_validate_json(row[0]) if row else None
+        return _verified_receipt(row, observation_id) if row else None
