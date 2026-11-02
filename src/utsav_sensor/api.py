@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field, model_validator
 
 from .adapters.nasa import search_nasa_scenes
 from .engine import SensorEngine
+from .errors import ObservationConflictError
 from .models import Observation
 from .place_query import geocode_place, summarize_coordinates
 from .store import SQLiteObservationStore
@@ -75,7 +76,12 @@ async def healthz():
 
 @app.post("/v1/observations", response_model=Observation)
 async def ingest(observation: Observation):
-    return await engine.ingest(observation)
+    try:
+        return await engine.ingest(observation)
+    except ObservationConflictError as exc:
+        raise HTTPException(
+            status_code=409, detail="observation ID already exists with different evidence"
+        ) from exc
 
 
 @app.get("/v1/observations")
