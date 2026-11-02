@@ -33,12 +33,16 @@ class ResearchReceiptIntegrityError(ValueError):
     """Stored receipt and canonical evidence disagree; do not trust either."""
 
 
-def _verified_receipt(row: tuple[str, str], expected_id: str) -> Observation:
+def _verified_receipt(row: tuple[str, str, str], expected_id: str) -> Observation:
     """Fail closed on inconsistent SQLite row fields (not a MAC or signature)."""
-    stored_evidence, payload = row
+    stored_evidence, payload, stored_receipt_at = row
     try:
         item = Observation.model_validate_json(payload)
-        if item.id != expected_id or _evidence_key(item) != stored_evidence:
+        if (
+            item.id != expected_id
+            or _evidence_key(item) != stored_evidence
+            or item.ingested_at.isoformat() != stored_receipt_at
+        ):
             raise ResearchReceiptIntegrityError("stored receipt/evidence mismatch")
     except (ValueError, TypeError) as exc:
         if isinstance(exc, ResearchReceiptIntegrityError):
@@ -59,10 +63,18 @@ class ResearchFirstReceiptStore:
                 """CREATE TABLE IF NOT EXISTS research_first_receipts (
                     id TEXT PRIMARY KEY,
                     evidence TEXT NOT NULL,
-                    payload TEXT NOT NULL
+                    payload TEXT NOT NULL,
+                    receipt_at TEXT NOT NULL
                 )"""
             )
             db.commit()
+            # Fail closed on old research databases. Backfilling a receipt from
+            # its mutable payload would falsely claim an independent time witness.
+            columns = {row[1] for row in db.execute("PRAGMA table_info(research_first_receipts)")}
+            if "receipt_at" not in columns:
+                raise ResearchReceiptIntegrityError(
+                    "legacy research receipt schema lacks receipt_at; no automatic migration"
+                )
 
     def put(self, observation: Observation) -> Observation:
         """First insert stamps server time; exact-evidence retries return it.
@@ -75,7 +87,7 @@ class ResearchFirstReceiptStore:
             db.execute("BEGIN IMMEDIATE")
             try:
                 row = db.execute(
-                    "SELECT evidence, payload FROM research_first_receipts WHERE id = ?",
+                    "SELECT evidence, payload, receipt_at FROM research_first_receipts WHERE id = ?",
                     (observation.id,),
                 ).fetchone()
                 if row is not None:
@@ -92,9 +104,14 @@ class ResearchFirstReceiptStore:
                         update={"ingested_at": receipt.astimezone(UTC)}
                     )
                     db.execute(
-                        "INSERT INTO research_first_receipts(id, evidence, payload) "
-                        "VALUES (?, ?, ?)",
-                        (observation.id, evidence, result.model_dump_json()),
+                        "INSERT INTO research_first_receipts(id, evidence, payload, receipt_at) "
+                        "VALUES (?, ?, ?, ?)",
+                        (
+                            observation.id,
+                            evidence,
+                            result.model_dump_json(),
+                            result.ingested_at.isoformat(),
+                        ),
                     )
                 db.execute("COMMIT")
                 return result
@@ -114,7 +131,7 @@ class ResearchFirstReceiptStore:
     def get(self, observation_id: str) -> Observation | None:
         with closing(sqlite3.connect(self.path, timeout=10)) as db:
             row = db.execute(
-                "SELECT evidence, payload FROM research_first_receipts WHERE id = ?",
+                "SELECT evidence, payload, receipt_at FROM research_first_receipts WHERE id = ?",
                 (observation_id,),
             ).fetchone()
         return _verified_receipt(row, observation_id) if row else None
